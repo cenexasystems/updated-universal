@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf'
-import { BRAND_ADDRESS, BRAND_EN, BRAND_PHONE_DISPLAY, BRAND_PRIMARY_PHONE_DISPLAY } from './brand'
+import { BRAND_ADDRESS, BRAND_PHONE_DISPLAY, BRAND_PRIMARY_PHONE_DISPLAY } from './brand'
 import { LOGO_BASE64 } from './logoBase64'
 import { formatCurrency } from './retail'
 import { formatPaymentLabel } from './payments'
@@ -22,7 +22,6 @@ export function advanceReceiptPdf(order: AdvanceOrder) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   doc.setFillColor('#111111'); doc.rect(0, 0, 210, 5, 'F')
   try { doc.addImage(LOGO_BASE64, 'PNG', 16, 9, 16, 16) } catch (_err) { /* ignore missing logo */ }
-  doc.setTextColor('#111111'); doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text(BRAND_EN.toUpperCase(), 38, 20)
   doc.setTextColor('#6B7280'); doc.setFontSize(8); doc.text('ADVANCE RECEIPT - NOT A TAX INVOICE', 38, 26)
 
   doc.setFont('helvetica', 'normal'); doc.text(BRAND_ADDRESS, 194, 20, { align: 'right', maxWidth: 76 }); doc.text(BRAND_PRIMARY_PHONE_DISPLAY, 194, 30, { align: 'right' })
@@ -83,7 +82,6 @@ export function printAdvanceReceipt(order: AdvanceOrder) {
 <div class="c" style="margin-bottom: 6px;">
   <img src="${LOGO_BASE64}" style="width: 50px; height: 50px; object-fit: contain; margin: 0 auto; display: block;" alt="Universal Look Logo" />
 </div>
-<div class="c big">${esc(BRAND_EN)}</div>
 <div class="c" style="font-size:10px;color:#555;">${esc(BRAND_ADDRESS)}</div>
 <div class="c" style="font-size:10px;color:#555;">${esc(BRAND_PHONE_DISPLAY)}</div>
 <div class="line"></div>

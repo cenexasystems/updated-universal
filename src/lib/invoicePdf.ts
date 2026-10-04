@@ -60,9 +60,6 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
     doc.text(BRAND_EN.toUpperCase(), left, y + 10)
   }
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
-  doc.setTextColor(primaryColor)
-  doc.text(BRAND_EN.toUpperCase(), left + 26, y + 5)
   doc.setFontSize(8)
   doc.setTextColor(muted)
   doc.setFont('helvetica', 'normal')

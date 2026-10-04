@@ -1,4 +1,4 @@
-import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_INSTAGRAM, BRAND_PRIMARY_PHONE_DISPLAY } from './brand'
+import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_INSTAGRAM, BRAND_PRIMARY_PHONE_DISPLAY } from './brand'
 import { LOGO_BASE64 } from './logoBase64'
 import { formatCurrency, formatInvoiceNo } from './retail'
 import { printHtmlDocument } from './printHtml'
@@ -87,7 +87,6 @@ export function printThermalReceipt(data: ThermalReceiptData) {
       <body>
         <div class="text-center mb-2">
           <img src="${LOGO_BASE64}" style="width: 48px; height: 48px; object-fit: contain; margin: 0 auto 6px auto; display: block;" alt="Universal Look Logo" />
-          <div class="font-bold" style="font-size: 16px; letter-spacing: 2px;">${(data.storeName || BRAND_EN).toUpperCase()}</div>
           <div style="font-size: 9.5px; margin-top: 2px; line-height: 1.3;">${data.storeAddress || BRAND_ADDRESS}</div>
           <div class="mt-1" style="font-size: 10px; font-weight: bold;">Ph: ${BRAND_PRIMARY_PHONE_DISPLAY}</div>
           <div style="font-size: 9px; color: #333;">${data.storeEmail || BRAND_EMAIL} | Insta: @${BRAND_INSTAGRAM}</div>
