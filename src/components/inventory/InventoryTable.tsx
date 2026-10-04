@@ -128,7 +128,9 @@ export const InventoryTable: React.FC = () => {
   const outOfStockCount = items.filter((i) => i.stock <= 0).length
   const lowStockCount = items.filter((i) => i.stock > 0 && i.stock <= (i.low_stock_threshold || 5)).length
   const inStockCount = items.filter((i) => i.stock > (i.low_stock_threshold || 5)).length
-  const totalValuation = items.reduce((sum, i) => sum + i.stock * i.price, 0)
+  // Only units on hand count; items missing a cost price contribute 0 to the cost valuation
+  const sellingValuation = items.reduce((sum, i) => sum + Math.max(i.stock, 0) * (i.price || 0), 0)
+  const costValuation = items.reduce((sum, i) => sum + Math.max(i.stock, 0) * (i.purchase_price || 0), 0)
 
   interface ProductOptionType {
     id: number
@@ -258,7 +260,7 @@ export const InventoryTable: React.FC = () => {
       {activeTab === 'stock' && (
         <div className="space-y-6 animate-in fade-in duration-150">
           {/* Top KPI Metrics Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <div className="bg-white border border-[#F3F4F6] rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-[#F9FAFB] text-[#111111] border border-[#F3F4F6] flex items-center justify-center font-black">
                 <Layers size={20} />
@@ -290,12 +292,22 @@ export const InventoryTable: React.FC = () => {
             </div>
 
             <div className="bg-white border border-[#F3F4F6] rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-11 h-11 shrink-0 rounded-xl bg-amber-50 text-[#B38018] border border-amber-200 flex items-center justify-center font-black text-sm">
+              <div className="w-11 h-11 shrink-0 rounded-xl bg-amber-50 text-[#B38018] border-amber-200 border flex items-center justify-center font-black text-sm">
                 ₹
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-bold text-gray-500">Stock Valuation</div>
-                <div className="break-all text-sm font-black leading-tight text-[#111111] sm:text-lg">{formatCurrency(totalValuation)}</div>
+                <div className="text-[10px] font-bold text-gray-500">Cost Price Valuation</div>
+                <div className="break-all text-sm font-black leading-tight text-[#111111] sm:text-lg">{formatCurrency(costValuation)}</div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-[#F3F4F6] rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-11 h-11 shrink-0 rounded-xl bg-emerald-50 text-emerald-700 border-emerald-200 border flex items-center justify-center font-black text-sm">
+                ₹
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-bold text-gray-500">Selling Price Valuation</div>
+                <div className="break-all text-sm font-black leading-tight text-[#111111] sm:text-lg">{formatCurrency(sellingValuation)}</div>
               </div>
             </div>
           </div>

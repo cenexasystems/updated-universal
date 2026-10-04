@@ -170,7 +170,7 @@ export async function getAdvanceOrderHistory(orderId: string) {
 
 export async function createAdvanceOrder(input: {
   customerName: string; phone: string; address: string; productName: string; category: string; description: string
-  totalAmount: number; depositAmount: number; expectedDeliveryDate: string; remarks: string; referenceNumber: string
+  totalAmount: number; depositAmount: number; expectedDeliveryDate: string; remarks: string; referenceNumber?: string
   paymentMethod: AdvancePaymentMethod; createdByName: string; products?: Array<Record<string, unknown>>
   splitDetails?: SplitDetails
 }): Promise<AdvanceOrder> {
@@ -197,10 +197,10 @@ export async function createAdvanceOrder(input: {
       } else if (data) {
         createdOrder = normalizeOrder(rpcRow(data))
         // Patch reference_number (not in RPC params)
-        if (input.referenceNumber.trim()) {
-          const { error: referenceError } = await supabase.from('advance_orders').update({ reference_number: input.referenceNumber.trim() }).eq('id', createdOrder.id)
+        if ((input.referenceNumber || '').trim()) {
+          const { error: referenceError } = await supabase.from('advance_orders').update({ reference_number: (input.referenceNumber || '').trim() }).eq('id', createdOrder.id)
           if (referenceError) throw new Error(referenceError.message)
-          createdOrder.reference_number = input.referenceNumber.trim()
+          createdOrder.reference_number = (input.referenceNumber || '').trim()
         }
       }
     } catch (err) {
@@ -232,7 +232,7 @@ export async function createAdvanceOrder(input: {
       expected_delivery_date: input.expectedDeliveryDate,
       status: 'pending_deposit',
       remarks: input.remarks.trim(),
-      reference_number: input.referenceNumber.trim(),
+      reference_number: (input.referenceNumber || '').trim(),
       created_by_name: input.createdByName,
       created_at: now.toISOString(),
       updated_at: now.toISOString(),

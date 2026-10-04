@@ -4,7 +4,7 @@ import {
   Box, AlertCircle, ArrowUp, ArrowDown, Power, Download, TrendingUp, TrendingDown,
   Package, Search, RefreshCw, ShieldCheck, ShieldOff, Trophy,
   MessageCircle, ChevronDown, Eye, FileText, Printer, MoreVertical, X, Layers, Receipt,
-  SlidersHorizontal, Tag, Ticket, Percent, CheckCircle2, Info, Sparkles, Banknote, QrCode, CreditCard,
+  SlidersHorizontal, Tag, Ticket, Percent, CheckCircle2, Info, Sparkles, Banknote, QrCode, CreditCard, Gift,
 } from 'lucide-react'
 import { paymentBreakdown, formatPaymentLabel } from '../lib/payments'
 
@@ -57,6 +57,7 @@ import type { AdvanceOrder } from '../services/advanceOrderService'
 import { InventoryTable } from '../components/inventory/InventoryTable'
 import { CategoryManagerView } from '../components/inventory/CategoryManagerView'
 import { ExpensesView } from '../components/expenses/ExpensesView'
+import { BirthdaysView } from '../components/birthdays/BirthdaysView'
 import { expenseService, type ExpenseRecord } from '../services/expenseService'
 import { useNavigationStore } from '../store/navigationStore'
 import { useHardwareBarcodeScanner } from '../hooks/useHardwareBarcodeScanner'
@@ -92,12 +93,15 @@ type DashboardCoupon = {
   usage_count: number
   min_order_value: number
 }
-type TabKey = 'overview' | 'whatsapp' | 'pos_analytics' | 'billing' | 'advance_orders' | 'inventory' | 'expenses' | 'products' | 'categories' | 'coupons' | 'users' | 'history'
+type TabKey = 'overview' | 'whatsapp' | 'pos_analytics' | 'billing' | 'advance_orders' | 'inventory' | 'expenses' | 'birthdays' | 'products' | 'categories' | 'coupons' | 'users' | 'history'
 type PosAnalyticsTab = 'revenue' | 'today' | 'products' | 'categories' | 'coupons'
 type ProfileUser = { id: string; email: string; name: string; mobile: string; role: string; created_at: string }
 
 const normalizeStatus = (v: unknown) => String(v || '').trim().toLowerCase()
 const normalizeOrderType = (v: unknown) => String(v || '').trim().toLowerCase() || 'pos_sale'
+// Single source of truth for the bill-type badge AND the Offline/Online/Manual filter
+const getBillType = (o: { order_type?: unknown; order_mode?: unknown }): 'manual' | 'online' | 'offline' =>
+  normalizeOrderType(o.order_type) === 'manual_sale' ? 'manual' : normalizeOrderMode(o.order_mode) === 'online' ? 'online' : 'offline'
 const isCompletedStatus = (v: unknown) => {
   const status = normalizeStatus(v)
   return status === 'completed' || status === 'paid'
@@ -348,6 +352,8 @@ export default function Dashboard() {
       navigate('/dashboard?tab=pos_analytics', { replace: true })
     } else if (tabKey === 'expenses') {
       navigate('/dashboard?tab=expenses', { replace: true })
+    } else if (tabKey === 'birthdays') {
+      navigate('/dashboard?tab=birthdays', { replace: true })
     } else if (tabKey === 'advance_orders') {
       navigate('/dashboard?tab=advance_orders', { replace: true })
     } else if (tabKey === 'inventory') {
@@ -859,9 +865,9 @@ export default function Dashboard() {
   // Bill-type and date-range filtered results for Order Management table (client-side, instant)
   const filteredSearchResults = useMemo(() => {
     return searchResults.filter(o => {
-      if (billTypeFilter === 'manual' && normalizeOrderType(o.order_type) !== 'manual_sale') return false
-      if (billTypeFilter === 'offline' && !(normalizeOrderType(o.order_type) === 'pos_sale' && normalizeOrderMode(o.order_mode) !== 'online')) return false
-      if (billTypeFilter === 'online' && !(normalizeOrderType(o.order_type) === 'pos_sale' && normalizeOrderMode(o.order_mode) === 'online')) return false
+      if (billTypeFilter === 'manual' && getBillType(o) !== 'manual') return false
+      if (billTypeFilter === 'offline' && getBillType(o) !== 'offline') return false
+      if (billTypeFilter === 'online' && getBillType(o) !== 'online') return false
 
       if (search.dateFrom) {
         const orderDate = toLocalDateKey(o.created_at)
@@ -1413,9 +1419,6 @@ export default function Dashboard() {
         q = q.lte('created_at', toDate.toISOString())
       }
 
-      if (billTypeFilter === 'manual')       q = q.eq('order_type', 'manual_sale')
-      else if (billTypeFilter === 'offline') q = q.eq('order_type', 'pos_sale').eq('order_mode', 'offline')
-      else if (billTypeFilter === 'online')  q = q.eq('order_type', 'pos_sale').eq('order_mode', 'online')
 
       const { data, error } = await q
       if (error) throw error
@@ -1465,14 +1468,15 @@ export default function Dashboard() {
       if (hasQuery || effectiveDateFrom || effectiveDateTo) {
         results = results.filter(matchOrder)
       }
+      if (billTypeFilter !== 'all') results = results.filter(o => getBillType(o) === billTypeFilter)
 
       // Fallback: if query returned no results from Supabase, search in pre-loaded orders
       if (results.length === 0 && orders.length > 0) {
         const localMatches = orders.filter(o => {
           if (normalizeOrderType(o.order_type) === 'online_request') return false
-          if (billTypeFilter === 'manual' && normalizeOrderType(o.order_type) !== 'manual_sale') return false
-          if (billTypeFilter === 'offline' && !(normalizeOrderType(o.order_type) === 'pos_sale' && normalizeOrderMode(o.order_mode) !== 'online')) return false
-          if (billTypeFilter === 'online' && !(normalizeOrderType(o.order_type) === 'pos_sale' && normalizeOrderMode(o.order_mode) === 'online')) return false
+          if (billTypeFilter === 'manual' && getBillType(o) !== 'manual') return false
+          if (billTypeFilter === 'offline' && getBillType(o) !== 'offline') return false
+          if (billTypeFilter === 'online' && getBillType(o) !== 'online') return false
           return matchOrder(o)
         })
         if (localMatches.length > 0) {
@@ -1795,6 +1799,7 @@ export default function Dashboard() {
         { id: 'billing',        icon: <ShoppingCart size={18} />, label: 'Billing Panel' },
         { id: 'inventory',      icon: <Layers size={18} />,       label: 'Inventory & Barcodes' },
         { id: 'advance_orders', icon: <FileText size={18} />,     label: 'Advance Orders' },
+        { id: 'birthdays',      icon: <Gift size={18} />,         label: 'Birthdays' },
         { id: 'expenses',       icon: <Receipt size={18} />,      label: 'Expenses' },
         { id: 'history',        icon: <List size={18} />,         label: 'Order History' },
         { id: 'pos_analytics',  icon: <BarChart2 size={18} />,    label: 'Analytics Dashboard' },
@@ -4675,6 +4680,11 @@ export default function Dashboard() {
         {/* ── EXPENSES TAB ── */}
         {tab === 'expenses' && (
           <ExpensesView />
+        )}
+
+        {/* ── BIRTHDAYS TAB ── */}
+        {tab === 'birthdays' && role === 'admin' && (
+          <BirthdaysView />
         )}
         {/* Footer: sits at the end of the scrolling content, visible only when scrolled to the bottom */}
         <div className="mt-10 border-t border-gray-200 pt-4 pb-1 text-center text-[12px] font-semibold text-[#9CA3AF] tracking-wide print:hidden">

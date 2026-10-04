@@ -1,0 +1,283 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Gift, Cake, Trash2, Plus, Pencil, Save, MessageCircle, Download } from 'lucide-react'
+import {
+  birthdayService, buildBirthdayMessage, birthdayInWindow, formatBirthDate, rangeToDates, toIsoDate,
+  type BirthdayOffer, type BirthdayRange, type CustomerBirthday,
+} from '../../services/birthdayService'
+import { toWhatsAppUrl, formatPhoneDisplay } from '../../lib/phone'
+import { downloadCsv } from '../../lib/exportCsv'
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const RANGES: Array<{ key: BirthdayRange; label: string }> = [
+  { key: 'today', label: 'Today' }, { key: 'week', label: 'This Week' }, { key: 'month', label: 'This Month' },
+  { key: 'year', label: 'This Year' }, { key: 'all', label: 'All' },
+]
+const card = 'bg-white rounded-2xl border border-gray-200 shadow-sm'
+const input = 'w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-[13px] font-bold text-[#111111] focus:outline-none focus:border-[#D4AF37]'
+
+const DateFilter: React.FC<{
+  range: BirthdayRange; from: string; to: string
+  onRange: (r: BirthdayRange) => void; onFrom: (v: string) => void; onTo: (v: string) => void
+}> = ({ range, from, to, onRange, onFrom, onTo }) => (
+  <>
+    <div className="flex flex-wrap gap-1.5 mb-3">
+      {RANGES.map(r => (
+        <button key={r.key} type="button" onClick={() => onRange(r.key)}
+          className={`px-3 py-1 rounded-lg text-[11px] font-black ${range === r.key ? 'bg-[#111111] text-[#D4AF37]' : 'bg-gray-100 text-[#374151] hover:bg-gray-200'}`}>
+          {r.label}
+        </button>
+      ))}
+    </div>
+    <div className="grid grid-cols-2 gap-3">
+      <label className="block"><span className="block text-[10px] font-black text-[#6B7280] mb-1">FROM</span>
+        <input type="date" className={input} value={from} onChange={e => onFrom(e.target.value)} /></label>
+      <label className="block"><span className="block text-[10px] font-black text-[#6B7280] mb-1">TO</span>
+        <input type="date" className={input} value={to} onChange={e => onTo(e.target.value)} /></label>
+    </div>
+  </>
+)
+
+const PeopleList: React.FC<{
+  people: CustomerBirthday[]; loading: boolean; showDob?: boolean
+  onSend: (p: CustomerBirthday) => void; onDelete: (p: CustomerBirthday) => void
+}> = ({ people, loading, showDob, onSend, onDelete }) => {
+  if (loading) return <p className="text-[12px] text-gray-500 p-3">Loading…</p>
+  if (!people.length) return <p className="text-[12px] text-gray-500 p-3">No birthdays found for this range.</p>
+  return (
+    <div className="divide-y divide-gray-100">
+      {people.map(p => (
+        <div key={p.id} className="flex items-center gap-3 py-2.5 px-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-black text-[#111111] truncate">{p.name || 'Customer'}</p>
+            <p className="text-[11px] text-gray-500">
+              {formatPhoneDisplay(p.phone)} · {showDob ? formatBirthDate(p.birth_date) : formatBirthDate(p.birth_date).slice(0, 5)}
+            </p>
+          </div>
+          <button type="button" onClick={() => onSend(p)} className="flex items-center gap-1 px-3 h-8 rounded-lg bg-[#059669] text-white text-[10px] font-black uppercase"><MessageCircle size={13} /> Send Offer</button>
+          <button type="button" aria-label="Delete" onClick={() => onDelete(p)} className="w-8 h-8 border border-red-200 rounded-lg text-red-500 flex items-center justify-center"><Trash2 size={14} /></button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export const BirthdaysView: React.FC = () => {
+  const [tab, setTab] = useState<'calendar' | 'customers'>('calendar')
+  const [people, setPeople] = useState<CustomerBirthday[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const today = new Date()
+  const [month, setMonth] = useState(today.getMonth())
+  const [year, setYear] = useState(today.getFullYear())
+  const [range, setRange] = useState<BirthdayRange>('all')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+
+  const [offers, setOffers] = useState<BirthdayOffer[]>(() => birthdayService.getOffers())
+  const [offerId, setOfferId] = useState(() => birthdayService.getOffers()[0].id)
+  const [template, setTemplate] = useState(() => birthdayService.getTemplate())
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void birthdayService.list().then(list => { if (!cancelled) { setPeople(list); setLoading(false) } })
+    return () => { cancelled = true }
+  }, [])
+
+  const offer = offers.find(o => o.id === offerId) || offers[0]
+  const applyRange = (r: BirthdayRange) => { const d = rangeToDates(r); setRange(r); setFrom(d.from); setTo(d.to) }
+  const setCustomFrom = (v: string) => { setRange('all'); setFrom(v) }
+  const setCustomTo = (v: string) => { setRange('all'); setTo(v) }
+
+  const filtered = useMemo(
+    () => people.filter(p => birthdayInWindow(p.birth_date, from, to)),
+    [people, from, to],
+  )
+
+  // "MM-DD" → people with a birthday that day (any birth year)
+  const byMonthDay = useMemo(() => {
+    const m = new Map<string, CustomerBirthday[]>()
+    for (const p of people) {
+      const key = p.birth_date.slice(5)
+      m.set(key, [...(m.get(key) || []), p])
+    }
+    return m
+  }, [people])
+
+  const cells = useMemo(() => {
+    const first = new Date(year, month, 1).getDay()
+    const days = new Date(year, month + 1, 0).getDate()
+    return [...Array(first).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)] as Array<number | null>
+  }, [month, year])
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(year, month + delta, 1)
+    setMonth(d.getMonth()); setYear(d.getFullYear())
+  }
+
+  const previewName = filtered[0]?.name || 'Aarav'
+  const preview = buildBirthdayMessage(template, previewName, offer?.label || '')
+
+  const sendOffer = (p: CustomerBirthday) => {
+    window.open(toWhatsAppUrl(p.phone, buildBirthdayMessage(template, p.name, offer?.label || '')), '_blank', 'noopener')
+  }
+
+  const remove = async (p: CustomerBirthday) => {
+    if (!window.confirm(`Remove birthday for ${p.name || p.phone}?`)) return
+    try { await birthdayService.remove(p.id); setPeople(prev => prev.filter(x => x.id !== p.id)) }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not delete') }
+  }
+
+  const addOffer = () => {
+    const label = window.prompt('Offer text (e.g. 20% OFF)')?.trim()
+    if (!label) return
+    const next = [...offers, { id: `o-${Date.now()}`, label }]
+    setOffers(next); setOfferId(next[next.length - 1].id); birthdayService.saveOffers(next)
+  }
+  const editOffer = () => {
+    if (!offer) return
+    const label = window.prompt('Edit offer text', offer.label)?.trim()
+    if (!label) return
+    const next = offers.map(o => (o.id === offer.id ? { ...o, label } : o))
+    setOffers(next); birthdayService.saveOffers(next)
+  }
+  const deleteOffer = () => {
+    if (!offer || offers.length <= 1) return
+    const next = offers.filter(o => o.id !== offer.id)
+    setOffers(next); setOfferId(next[0].id); birthdayService.saveOffers(next)
+  }
+  const saveTemplate = () => { birthdayService.saveTemplate(template); setDirty(false) }
+
+  const exportCsv = () => {
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`
+    const rows = [['Customer', 'Mobile', 'Date of Birth'], ...filtered.map(p => [p.name, p.phone, formatBirthDate(p.birth_date)])]
+    void downloadCsv('birthdays.csv', rows.map(r => r.map(esc).join(',')).join('\n'))
+  }
+
+  const years = Array.from({ length: 11 }, (_, i) => today.getFullYear() - 5 + i)
+  const todayIso = toIsoDate(today)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-xl bg-[#FDF6E3] flex items-center justify-center text-[#B38018]"><Cake size={22} /></div>
+        <div>
+          <h2 className="text-xl font-black text-[#111111]">Date of Birth</h2>
+          <p className="text-[12px] font-medium text-gray-500">Customer birthdays &amp; one-tap offer sender</p>
+        </div>
+      </div>
+
+      <div className="flex gap-6 border-b border-gray-200">
+        {(['calendar', 'customers'] as const).map(t => (
+          <button key={t} type="button" onClick={() => setTab(t)}
+            className={`pb-2 text-[13px] font-black capitalize border-b-2 -mb-px ${tab === t ? 'border-[#B38018] text-[#B38018]' : 'border-transparent text-gray-500 hover:text-[#111111]'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {error && <p className="text-[12px] font-bold text-red-600">{error}</p>}
+
+      {tab === 'calendar' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 items-start">
+          <div className="space-y-4">
+            <div className={`${card} p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <select className="h-9 px-2 border border-gray-200 rounded-lg text-[12px] font-bold" value={month} onChange={e => setMonth(Number(e.target.value))}>
+                  {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                </select>
+                <select className="h-9 px-2 border border-gray-200 rounded-lg text-[12px] font-bold" value={year} onChange={e => setYear(Number(e.target.value))}>
+                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <div className="ml-auto flex gap-1">
+                  <button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="w-8 h-8 border border-gray-200 rounded-lg flex items-center justify-center"><ChevronLeft size={14} /></button>
+                  <button type="button" onClick={() => { setMonth(today.getMonth()); setYear(today.getFullYear()) }} className="px-2 h-8 border border-gray-200 rounded-lg text-[11px] font-bold">Today</button>
+                  <button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="w-8 h-8 border border-gray-200 rounded-lg flex items-center justify-center"><ChevronRight size={14} /></button>
+                </div>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {WEEKDAYS.map((w, i) => <div key={i} className="text-[10px] font-black text-gray-400 py-1">{w}</div>)}
+                {cells.map((d, i) => {
+                  if (!d) return <div key={i} />
+                  const md = `${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                  const has = byMonthDay.has(md)
+                  const iso = `${year}-${md}`
+                  return (
+                    <button key={i} type="button" onClick={() => { setRange('all'); setFrom(iso); setTo(iso) }}
+                      title={has ? byMonthDay.get(md)!.map(p => p.name || p.phone).join(', ') : undefined}
+                      className={`h-8 rounded-md border text-[11px] font-bold flex flex-col items-center justify-center leading-none ${iso === todayIso ? 'border-[#D4AF37] bg-[#FDF6E3]' : 'border-gray-200 hover:bg-gray-50'} ${from === iso && to === iso ? 'ring-2 ring-[#B38018]' : ''}`}>
+                      {d}
+                      {has && <span className="w-1 h-1 rounded-full bg-red-500 mt-0.5" />}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-3 text-[10px] text-gray-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Dot = birthday</p>
+            </div>
+            <div className={`${card} p-4`}>
+              <p className="text-[12px] font-black text-[#111111] mb-2">Filter by date</p>
+              <DateFilter range={range} from={from} to={to} onRange={applyRange} onFrom={setCustomFrom} onTo={setCustomTo} />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className={`${card} p-4 md:p-5`}>
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-9 h-9 rounded-lg bg-[#FDF6E3] flex items-center justify-center text-[#B38018]"><Gift size={18} /></div>
+                <div className="flex-1">
+                  <h3 className="text-[15px] font-black text-[#111111]">Birthday Offer Message</h3>
+                  <p className="text-[11px] text-gray-500">Sent on WhatsApp when you tap "Send Offer".</p>
+                </div>
+                <button type="button" onClick={saveTemplate} disabled={!dirty}
+                  className="flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-black bg-[#111111] text-[#D4AF37] disabled:bg-gray-200 disabled:text-gray-400">
+                  <Save size={14} /> Save
+                </button>
+              </div>
+
+              <p className="text-[10px] font-black text-[#6B7280] mb-1">SELECT OFFER</p>
+              <div className="flex gap-2 mb-2">
+                <select className={input} value={offer?.id} onChange={e => setOfferId(e.target.value)}>
+                  {offers.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+                <button type="button" aria-label="Edit offer" onClick={editOffer} className="w-10 h-10 shrink-0 border border-gray-200 rounded-xl flex items-center justify-center text-[#B38018]"><Pencil size={15} /></button>
+                <button type="button" aria-label="Delete offer" onClick={deleteOffer} disabled={offers.length <= 1} className="w-10 h-10 shrink-0 border border-red-200 bg-red-50 rounded-xl flex items-center justify-center text-red-500 disabled:opacity-40"><Trash2 size={15} /></button>
+              </div>
+              <button type="button" onClick={addOffer} className="w-full h-9 mb-4 border border-dashed border-[#D4AF37] rounded-xl text-[12px] font-black text-[#B38018] flex items-center justify-center gap-1"><Plus size={14} /> Add Offer</button>
+
+              <p className="text-[10px] font-black text-[#6B7280] mb-1">CUSTOMIZE MESSAGE</p>
+              <textarea rows={6} value={template} onChange={e => { setTemplate(e.target.value); setDirty(true) }}
+                className="w-full p-3 border border-gray-200 rounded-xl text-[13px] font-semibold text-[#111111] focus:outline-none focus:border-[#D4AF37]" />
+              <p className="text-[10px] text-gray-500 mt-1 mb-4">Use <b>{'{name}'}</b> for the customer's name and <b>{'{offer}'}</b> for the selected offer.</p>
+
+              <div className="rounded-xl bg-[#F3F9F1] border border-green-200 p-4">
+                <p className="text-[10px] font-black text-[#6B7280] mb-2">MESSAGE PREVIEW</p>
+                <p className="text-[13px] text-[#111111] whitespace-pre-wrap">{preview}</p>
+              </div>
+            </div>
+
+            <div className={`${card} p-4 md:p-5`}>
+              <h3 className="text-[14px] font-black text-[#111111] mb-3">Birthdays in selected dates ({filtered.length})</h3>
+              <PeopleList people={filtered} loading={loading} onSend={sendOffer} onDelete={remove} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className={`${card} p-4`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[13px] font-black text-[#111111]">Filter by upcoming birthday</p>
+              <button type="button" onClick={exportCsv} disabled={!filtered.length}
+                className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-green-50 text-green-700 text-[11px] font-black disabled:opacity-40"><Download size={13} /> Export CSV</button>
+            </div>
+            <DateFilter range={range} from={from} to={to} onRange={applyRange} onFrom={setCustomFrom} onTo={setCustomTo} />
+          </div>
+          <div className={`${card} p-2 md:p-4`}>
+            <PeopleList people={filtered} loading={loading} onSend={sendOffer} onDelete={remove} showDob />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -1,3 +1,4 @@
+import { birthdayService } from '../services/birthdayService'
 import { useEffect, useMemo, useRef, useState, useCallback, type FormEvent } from 'react'
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { Link, useNavigate } from 'react-router-dom'
@@ -35,8 +36,6 @@ import { formatPhoneDisplay, normalizePhone, toWhatsAppUrl } from '../lib/phone'
 import { useLangStore } from '../store/langStore'
 import { fetchVariantsByProduct, type ProductVariant } from '../services/variantService'
 import { BarcodeScannerInput, type ScannedItemPayload } from '../components/pos/BarcodeScannerInput'
-import { AddUnregisteredItemModal } from '../components/pos/AddUnregisteredItemModal'
-import { getOrCreateUnregisteredProduct } from '../services/productService'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type PosItem = Product & {
@@ -107,6 +106,12 @@ const makePosItem = (p: Product, qty?: number): PosItem => {
   }
 }
 
+// item.name may already end with the variant ("Shirt - XS"); never append it twice
+const itemDisplayName = (item: { name: string; variantName?: string }) =>
+  item.variantName && !item.name.trim().toLowerCase().endsWith(item.variantName.trim().toLowerCase())
+    ? `${item.name} - ${item.variantName}`
+    : item.name
+
 const recalc = (item: PosItem, nextQty: number): PosItem => {
   const q = Math.max(1, Math.round(nextQty))
   return { ...item, qty: q, lineTotal: calculateLineTotal(q, item.unitType, item.baseQuantity, item.basePrice) }
@@ -146,7 +151,7 @@ export default function Pos(props: PosProps = {}) {
   const [items, setItems] = useState<PosItem[]>([])
   const [customer, setCustomer] = useState({ name: '', phone: '', address: '' })
   const [remarks, setRemarks] = useState('')
-  const [referenceNumber, setReferenceNumber] = useState('')
+  const [birthDate, setBirthDate] = useState('') // YYYY-MM-DD, optional
   const [billingDate, setBillingDate] = useState('') // '' = use current date/time
   const [paymentType, setPaymentType] = useState<'cash' | 'qr' | 'card' | 'split'>('cash')
   const [splitForm, setSplitForm] = useState<SplitInputValue>(emptySplitInput())
@@ -173,10 +178,9 @@ export default function Pos(props: PosProps = {}) {
   const [gstInput, setGstInput] = useState('')
   const [gstType, setGstType] = useState<'percent' | 'flat'>('percent')
   const [catalogOpen, setCatalogOpen] = useState(false)
-  const [addUnregisteredOpen, setAddUnregisteredOpen] = useState(false)
   const [depositOpen, setDepositOpen] = useState(false)
   const [depositCreated, setDepositCreated] = useState<AdvanceOrder | null>(null)
-  const [depositForm, setDepositForm] = useState({ amount: '', expectedDeliveryDate: '', paymentMethod: 'cash' as AdvancePaymentMethod, address: '', remarks: '', referenceNumber: '' })
+  const [depositForm, setDepositForm] = useState({ amount: '', expectedDeliveryDate: '', paymentMethod: 'cash' as AdvancePaymentMethod, address: '', remarks: '' })
   const [dbCategories, setDbCategories] = useState<string[]>([])
   const [priceEditModal, setPriceEditModal] = useState<{
     isOpen: boolean
@@ -468,71 +472,6 @@ export default function Pos(props: PosProps = {}) {
 
 
 
-  const handleAddUnregisteredItem = async (input: {
-    name: string
-    price: number
-    quantity: number
-    note?: string
-  }) => {
-    try {
-      const product = await getOrCreateUnregisteredProduct(input.name, input.price)
-      const newItem: PosItem = {
-        id: product.id,
-        name: input.name,
-        nameTa: undefined,
-        tamilName: undefined,
-        category: 'Unregistered',
-        categoryId: '4',
-        remedy: [],
-        price: input.price,
-        offerPrice: null,
-        stock: 999999,
-        stockQuantity: 999999,
-        hasVariants: false,
-        unitType: 'unit',
-        unitLabel: 'piece',
-        baseQuantity: 1,
-        stockUnit: 'piece',
-        allowDecimalQuantity: false,
-        predefinedOptions: [],
-        isActive: true,
-        sortOrder: 999,
-        unit: 'piece',
-        rating: 5,
-        description: '',
-        benefits: '',
-        image: '/product-placeholder.svg',
-        imageUrl: '/product-placeholder.svg',
-        qty: input.quantity,
-        selectedUnit: 'piece',
-        basePrice: input.price,
-        lineTotal: calculateLineTotal(input.quantity, 'unit', 1, input.price),
-        source: 'manual',
-        note: input.note || null,
-      }
-
-      setItems((cur) => {
-        const ex = cur.find((i) => i.id === product.id && (i.source === 'manual' || i.category === 'Unregistered'))
-        if (!ex) return [newItem, ...cur]
-        return cur.map((i) => {
-          if (i.id === product.id && (i.source === 'manual' || i.category === 'Unregistered')) {
-            const updatedQty = i.qty + input.quantity
-            return {
-              ...i,
-              qty: updatedQty,
-              basePrice: input.price,
-              lineTotal: calculateLineTotal(updatedQty, 'unit', 1, input.price),
-              note: input.note || i.note,
-            }
-          }
-          return i
-        })
-      })
-    } catch (err: unknown) {
-      console.error('Failed to add unregistered item:', err)
-      throw err
-    }
-  }
 
   const removeItem = (id: string | number) => setItems(cur => cur.filter(i => i.id !== id))
 
@@ -654,7 +593,7 @@ export default function Pos(props: PosProps = {}) {
     setError('')
     setShipping('0')
     setRemarks('')
-    setReferenceNumber('')
+    setBirthDate('')
     setBillingDate('')
     setBillGstEnabled(false)
     setGstInput('')
@@ -729,7 +668,7 @@ export default function Pos(props: PosProps = {}) {
     if (total <= 0) { setError('The order total must be greater than zero.'); return }
     const enteredAmount = Number(cashReceived) || 0
     const suggestedDeposit = enteredAmount > 0 && enteredAmount < total ? String(enteredAmount) : ''
-    setDepositForm({ amount: suggestedDeposit, expectedDeliveryDate: '', paymentMethod: 'cash', address: customer.address || '', remarks: '', referenceNumber: '' })
+    setDepositForm({ amount: suggestedDeposit, expectedDeliveryDate: '', paymentMethod: 'cash', address: customer.address || '', remarks: '' })
     setDepositSplit(emptySplitInput())
     setError('')
     setDepositOpen(true)
@@ -764,7 +703,7 @@ export default function Pos(props: PosProps = {}) {
         category: Array.from(new Set(items.map(item => item.category).filter(Boolean))).join(', '),
         description: items.map(item => `${item.qty}× ${item.name}${item.note ? ` — ${item.note}` : ''}`).join('\n'),
         totalAmount: total, depositAmount, expectedDeliveryDate: depositForm.expectedDeliveryDate,
-        remarks: depositForm.remarks, referenceNumber: depositForm.referenceNumber, paymentMethod: depositForm.paymentMethod, createdByName: role || 'Staff',
+        remarks: depositForm.remarks, paymentMethod: depositForm.paymentMethod, createdByName: role || 'Staff',
         products: productsSnapshot,
         splitDetails: depositForm.paymentMethod === 'split' ? splitInputToDetails(depositSplit) : undefined,
       })
@@ -839,7 +778,6 @@ export default function Pos(props: PosProps = {}) {
         paymentMethod: paymentMode,
         splitDetails: splitDetailsForBill,
         remarks: remarks.trim(),
-        referenceNumber: referenceNumber.trim(),
         billingDate: effectiveBillingDate,
       })
 
@@ -860,7 +798,6 @@ export default function Pos(props: PosProps = {}) {
         manual_discount_amount: manualDiscountAmount,
         delivery_charge: Number(shipping || 0),
         remarks: remarks.trim(),
-        reference_number: referenceNumber.trim(),
         billing_date: effectiveBillingDate,
       }).eq('id', created.orderId)
 
@@ -878,6 +815,9 @@ export default function Pos(props: PosProps = {}) {
 
       if (verifyErr || !verifiedOrder) {
         throw new Error(`Invoice confirmation failed: could not verify order #${created.invoiceNo} was saved in the database.`)
+      }
+      if (birthDate && normalizedPhone) {
+        void birthdayService.save({ name: customer.name, phone: normalizedPhone, birthDate })
       }
       const createdInvoice: InvoiceSnap = {
         id: created.orderId,
@@ -1223,30 +1163,19 @@ export default function Pos(props: PosProps = {}) {
                 />
               </div>
               <div className="min-w-0">
-                <label htmlFor="pos-remarks" className="block text-[11px] md:text-[10px] font-bold text-[#374151] mb-1">Remarks (Internal)</label>
+                <label htmlFor="pos-birth-date" className="block text-[11px] md:text-[10px] font-bold text-[#374151] mb-1">Birthday (Optional)</label>
                 <input
-                  id="pos-remarks"
-                  name="remarks"
-                  type="text"
-                  value={remarks}
-                  onChange={e => setRemarks(e.target.value)}
-                  placeholder="Optional remarks"
-                  className="w-full min-w-0 max-w-full box-border h-10 sm:h-11 px-3 sm:px-4 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#D4AF37] text-[13px] font-bold text-[#111111] placeholder:text-gray-400 placeholder:font-medium"
+                  id="pos-birth-date"
+                  name="birthDate"
+                  type="date"
+                  max={new Date().toISOString().slice(0, 10)}
+                  value={birthDate}
+                  onChange={e => setBirthDate(e.target.value)}
+                  className="block w-full min-w-0 max-w-full box-border h-10 sm:h-11 px-3 sm:px-4 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#D4AF37] text-[13px] font-bold text-[#111111]"
                 />
+                <p className="mt-1 text-[10px] text-gray-400 font-medium">Used to send birthday offers on WhatsApp</p>
               </div>
               <div className="min-w-0">
-                <label htmlFor="pos-reference-number" className="block text-[11px] md:text-[10px] font-bold text-[#374151] mb-1">Reference Number</label>
-                <input
-                  id="pos-reference-number"
-                  name="referenceNumber"
-                  type="text"
-                  value={referenceNumber}
-                  onChange={e => setReferenceNumber(e.target.value)}
-                  placeholder="Optional ref no."
-                  className="w-full min-w-0 max-w-full box-border h-10 sm:h-11 px-3 sm:px-4 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#D4AF37] text-[13px] font-bold text-[#111111] placeholder:text-gray-400 placeholder:font-medium"
-                />
-              </div>
-              <div className="min-w-0 md:col-span-2">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-[11px] md:text-[10px] font-bold text-[#374151]">Billing Date (Optional)</label>
                   {billingDate && (
@@ -1268,6 +1197,18 @@ export default function Pos(props: PosProps = {}) {
                   style={{ maxWidth: '100%', boxSizing: 'border-box' }}
                 />
                 <p className="mt-1 text-[10px] text-gray-400 font-medium">Leave blank to use today's date &amp; time</p>
+              </div>
+              <div className="min-w-0 md:col-span-2">
+                <label htmlFor="pos-remarks" className="block text-[11px] md:text-[10px] font-bold text-[#374151] mb-1">Remarks (Internal)</label>
+                <input
+                  id="pos-remarks"
+                  name="remarks"
+                  type="text"
+                  value={remarks}
+                  onChange={e => setRemarks(e.target.value)}
+                  placeholder="Optional remarks"
+                  className="w-full min-w-0 max-w-full box-border h-10 sm:h-11 px-3 sm:px-4 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#D4AF37] text-[13px] font-bold text-[#111111] placeholder:text-gray-400 placeholder:font-medium"
+                />
               </div>
             </div>
           </div>
@@ -1309,16 +1250,6 @@ export default function Pos(props: PosProps = {}) {
                   <Search className="w-3.5 h-3.5 text-[#B38018]" />
                   <span className="tracking-wide">Search Catalog</span>
                 </button>
-
-                {/* Button 2: Add Item (Ad-Hoc Unregistered) */}
-                <button
-                  type="button"
-                  onClick={() => setAddUnregisteredOpen(true)}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 sm:px-3.5 text-[11px] font-bold rounded-lg bg-[#111111] text-[#D4AF37] hover:bg-[#262626] border border-[#D4AF37]/60 shadow-xs transition-all shrink-0 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span className="tracking-wide">Add Item</span>
-                </button>
               </div>
             </div>
 
@@ -1356,13 +1287,8 @@ export default function Pos(props: PosProps = {}) {
                         ) : (
                           <div>
                             <h4 className="text-[14px] font-bold text-[#111111] leading-snug break-words">
-                              {item.name}
+                              {itemDisplayName(item)}
                             </h4>
-                            {item.variantName && (
-                              <span className="inline-block mt-0.5 text-[10.5px] font-semibold text-[#B48811] bg-[#FBFAF6] border border-[#F3F4F6]/60 px-1.5 py-0.5 rounded">
-                                {item.variantName}
-                              </span>
-                            )}
                           </div>
                         )}
                         {/* Clickable Unit Price Pill Badge */}
@@ -1441,7 +1367,7 @@ export default function Pos(props: PosProps = {}) {
                         />
                       ) : (
                         <div className="px-3 py-2 w-full truncate border border-transparent flex items-center gap-2">
-                          <span className="text-[13px] font-bold text-[#111111] truncate">{item.name} {item.variantName ? `- ${item.variantName}` : ''}</span>
+                          <span className="text-[13px] font-bold text-[#111111] truncate">{itemDisplayName(item)}</span>
                         </div>
                       )}
                       {item.source !== 'manual' && (
@@ -1821,7 +1747,6 @@ export default function Pos(props: PosProps = {}) {
               <label htmlFor="pos-deposit-payment-method" className="block"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Payment method *</span><select id="pos-deposit-payment-method" name="paymentMethod" value={depositForm.paymentMethod} onChange={e => setDepositForm({...depositForm,paymentMethod:e.target.value as AdvancePaymentMethod})} className="w-full rounded-xl border px-3 py-2.5 text-sm font-bold outline-none focus:border-gray-600"><option value="cash">Cash</option><option value="upi">QR</option><option value="card">Card</option><option value="split">Split (Cash + QR)</option></select></label>
               {depositForm.paymentMethod === 'split' && (<div className="sm:col-span-2"><SplitPaymentInputs idPrefix="pos-deposit-split" total={Number(depositForm.amount) || 0} value={depositSplit} onChange={setDepositSplit} /></div>)}
               <label htmlFor="pos-deposit-address" className="block sm:col-span-2"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Delivery address</span><textarea id="pos-deposit-address" name="deliveryAddress" autoComplete="street-address" value={depositForm.address} onChange={e => setDepositForm({...depositForm,address:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-gray-600" rows={2}/></label>
-              <label htmlFor="pos-deposit-ref-no" className="block sm:col-span-2"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Reference Number</span><input id="pos-deposit-ref-no" name="referenceNumber" value={depositForm.referenceNumber} onChange={e => setDepositForm({...depositForm,referenceNumber:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-gray-600" placeholder="e.g. PO-001, booking ref (optional)"/></label>
               <label htmlFor="pos-deposit-remarks" className="block sm:col-span-2"><span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#6B7280]">Remarks</span><textarea id="pos-deposit-remarks" name="depositRemarks" value={depositForm.remarks} onChange={e => setDepositForm({...depositForm,remarks:e.target.value})} className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-gray-600" rows={2}/></label>
             </div>
             {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-600">{error}</div>}
@@ -1851,14 +1776,6 @@ export default function Pos(props: PosProps = {}) {
             void addItem(p)
             setCatalogOpen(false)
           }}
-        />
-      )}
-
-      {addUnregisteredOpen && (
-        <AddUnregisteredItemModal
-          isOpen={addUnregisteredOpen}
-          onClose={() => setAddUnregisteredOpen(false)}
-          onSubmit={handleAddUnregisteredItem}
         />
       )}
 
