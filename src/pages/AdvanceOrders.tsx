@@ -73,6 +73,7 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
   useEffect(() => { void load() }, [load])
 
   const handleDeleteOrder = async (orderId: string, orderName: string) => {
+    if (role === 'staff') return // staff cannot delete advance orders
     if (!window.confirm(`Are you sure you want to delete advance order "${orderName}"? This action cannot be undone.`)) return
     try {
       await deleteAdvanceOrder(orderId)
@@ -348,15 +349,17 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
                         <Eye size={15}/>
                       </button>
 
-                      {/* Delete Icon */}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteOrder(order.id, order.customer_name)}
-                        className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-red-100 text-red-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                        title="Delete Order"
-                      >
-                        <Trash2 size={15}/>
-                      </button>
+                      {/* Delete Icon (admin only) */}
+                      {role !== 'staff' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteOrder(order.id, order.customer_name)}
+                          className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-red-100 text-red-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                          title="Delete Order"
+                        >
+                          <Trash2 size={15}/>
+                        </button>
+                      )}
 
                       {/* Print Receipt / Invoice */}
                       <button

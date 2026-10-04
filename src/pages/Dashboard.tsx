@@ -1037,15 +1037,8 @@ export default function Dashboard() {
   }
 
   const deleteOrder = async (orderId: string, invoiceNo: string) => {
-    if (role === 'staff') {
-      const pwd = window.prompt(`Enter admin password to delete order ${invoiceNo}:`)
-      if (pwd !== '192267') {
-        alert('Incorrect password. Deletion cancelled.')
-        return
-      }
-    } else {
-      if (!window.confirm(`Are you sure you want to completely delete order ${invoiceNo}? This cannot be undone.`)) return
-    }
+    if (role === 'staff') return // staff cannot delete orders
+    if (!window.confirm(`Are you sure you want to completely delete order ${invoiceNo}? This cannot be undone.`)) return
     // Clear FK reference in advance_orders first (if this order was created from an advance order)
     await supabase.from('advance_orders').update({ completed_order_id: null }).eq('completed_order_id', orderId)
     const { error } = await supabase.from('orders').delete().eq('id', orderId)
@@ -2291,9 +2284,11 @@ export default function Dashboard() {
                                     <option value="contacted">{l('Contacted', 'தொடர்பு')}</option>
                                     <option value="completed">{l('Completed', 'முடிந்தது')}</option>
                                   </select>
-                                  <button onClick={() => void deleteOrder(order.id, order.invoice_no)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Order">
+                                  {role !== 'staff' && (
+                                    <button onClick={() => void deleteOrder(order.id, order.invoice_no)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete Order">
                                     <Trash2 size={14} />
                                   </button>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-4 py-3 text-center">
@@ -3630,9 +3625,11 @@ export default function Dashboard() {
                             <option value="pending">{l('Pending', 'நிலுவை')}</option>
                             <option value="completed">{l('Completed', 'முடிந்தது')}</option>
                           </select>
-                          <button onClick={() => void deleteOrder(o.id, o.invoice_no)} className="h-10 w-10 sm:h-11 sm:w-11 shrink-0 rounded-xl border border-[#F3F4F6]/60 text-[#B38018] transition-colors hover:bg-[#D4AF37]/5 cursor-pointer" title="Delete Order">
+                          {role !== 'staff' && (
+                            <button onClick={() => void deleteOrder(o.id, o.invoice_no)} className="h-10 w-10 sm:h-11 sm:w-11 shrink-0 rounded-xl border border-[#F3F4F6]/60 text-[#B38018] transition-colors hover:bg-[#D4AF37]/5 cursor-pointer" title="Delete Order">
                             <Trash2 size={14} className="mx-auto" />
                           </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3680,9 +3677,11 @@ export default function Dashboard() {
                                 <option value="pending">{l('Pending', 'நிலுவை')}</option>
                                 <option value="completed">{l('Completed', 'முடிந்தது')}</option>
                               </select>
-                              <button onClick={() => void deleteOrder(o.id, o.invoice_no)} className="rounded-lg p-1 text-[#B38018] transition-colors hover:bg-[#D4AF37]/5 cursor-pointer" title="Delete Order">
+                              {role !== 'staff' && (
+                                <button onClick={() => void deleteOrder(o.id, o.invoice_no)} className="rounded-lg p-1 text-[#B38018] transition-colors hover:bg-[#D4AF37]/5 cursor-pointer" title="Delete Order">
                                 <Trash2 size={13} />
                               </button>
+                              )}
                             </div>
                           </td>
                           <td className="px-2 py-3">

@@ -119,7 +119,10 @@ export const rangeToDates = (range: BirthdayRange, today = new Date()): { from: 
   switch (range) {
     case 'today': return { from: toIsoDate(t), to: toIsoDate(t) }
     case 'week': return { from: toIsoDate(t), to: toIsoDate(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 6)) }
-    case 'month': return { from: toIsoDate(t), to: toIsoDate(new Date(t.getFullYear(), t.getMonth() + 1, 0)) }
+    case 'month': return {
+      from: toIsoDate(new Date(t.getFullYear(), t.getMonth(), 1)),
+      to: toIsoDate(new Date(t.getFullYear(), t.getMonth() + 1, 0)),
+    }
     case 'year': return { from: toIsoDate(t), to: `${t.getFullYear()}-12-31` }
     default: return { from: '', to: '' }
   }

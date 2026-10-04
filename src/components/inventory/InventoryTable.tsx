@@ -297,7 +297,7 @@ export const InventoryTable: React.FC = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-bold text-gray-500">Cost Price Valuation</div>
-                <div className="break-all text-sm font-black leading-tight text-[#111111] sm:text-lg">{formatCurrency(costValuation)}</div>
+                <div className="whitespace-nowrap text-[13px] font-black leading-tight text-[#111111] sm:text-base">{formatCurrency(costValuation)}</div>
               </div>
             </div>
 
@@ -307,7 +307,7 @@ export const InventoryTable: React.FC = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-bold text-gray-500">Selling Price Valuation</div>
-                <div className="break-all text-sm font-black leading-tight text-[#111111] sm:text-lg">{formatCurrency(sellingValuation)}</div>
+                <div className="whitespace-nowrap text-[13px] font-black leading-tight text-[#111111] sm:text-base">{formatCurrency(sellingValuation)}</div>
               </div>
             </div>
           </div>
