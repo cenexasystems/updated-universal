@@ -1,20 +1,46 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Gift, Cake, Trash2, Plus, Pencil, Save, MessageCircle, Download } from 'lucide-react'
 import {
-  birthdayService, buildBirthdayMessage, birthdayInWindow, formatBirthDate, rangeToDates, toIsoDate,
+  birthdayService, buildBirthdayMessage, birthdayInWindow, birthMonthDay, formatBirthDate, rangeToDates, toMonthDay,
   type BirthdayOffer, type BirthdayRange, type CustomerBirthday,
 } from '../../services/birthdayService'
 import { toWhatsAppUrl, formatPhoneDisplay } from '../../lib/phone'
 import { downloadCsv } from '../../lib/exportCsv'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] // Feb includes the 29th
+const pad2 = (n: number) => String(n).padStart(2, '0')
 const RANGES: Array<{ key: BirthdayRange; label: string }> = [
   { key: 'today', label: 'Today' }, { key: 'week', label: 'This Week' }, { key: 'month', label: 'This Month' },
-  { key: 'year', label: 'This Year' }, { key: 'all', label: 'All' },
+  { key: 'all', label: 'All' },
 ]
 const card = 'bg-white rounded-2xl border border-gray-200 shadow-sm'
 const input = 'w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-[13px] font-bold text-[#111111] focus:outline-none focus:border-[#D4AF37]'
+
+const MonthDayPicker: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({ label, value, onChange }) => {
+  const [m, d] = value ? value.split('-').map(Number) : [0, 0]
+  const sel = 'h-10 px-2 bg-white border border-gray-200 rounded-xl text-[13px] font-bold text-[#111111] focus:outline-none focus:border-[#D4AF37] min-w-0 flex-1'
+  const setMonthPart = (nm: number) => {
+    if (!nm) return onChange('')
+    onChange(`${pad2(nm)}-${pad2(Math.min(d || 1, DAYS_IN_MONTH[nm - 1]))}`)
+  }
+  const setDayPart = (nd: number) => onChange(`${pad2(m || 1)}-${pad2(nd)}`)
+  return (
+    <div>
+      <span className="block text-[10px] font-black text-[#6B7280] mb-1">{label}</span>
+      <div className="flex gap-1.5">
+        <select aria-label={`${label} month`} className={sel} value={m} onChange={e => setMonthPart(Number(e.target.value))}>
+          <option value={0}>Month</option>
+          {MONTHS.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+        </select>
+        <select aria-label={`${label} day`} className={sel} value={d} disabled={!m} onChange={e => setDayPart(Number(e.target.value))}>
+          <option value={0}>Day</option>
+          {Array.from({ length: m ? DAYS_IN_MONTH[m - 1] : 0 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+        </select>
+      </div>
+    </div>
+  )
+}
 
 const DateFilter: React.FC<{
   range: BirthdayRange; from: string; to: string
@@ -30,18 +56,16 @@ const DateFilter: React.FC<{
       ))}
     </div>
     <div className="grid grid-cols-2 gap-3">
-      <label className="block"><span className="block text-[10px] font-black text-[#6B7280] mb-1">FROM</span>
-        <input type="date" className={input} value={from} onChange={e => onFrom(e.target.value)} /></label>
-      <label className="block"><span className="block text-[10px] font-black text-[#6B7280] mb-1">TO</span>
-        <input type="date" className={input} value={to} onChange={e => onTo(e.target.value)} /></label>
+      <MonthDayPicker label="FROM" value={from} onChange={onFrom} />
+      <MonthDayPicker label="TO" value={to} onChange={onTo} />
     </div>
   </>
 )
 
 const PeopleList: React.FC<{
-  people: CustomerBirthday[]; loading: boolean; showDob?: boolean
+  people: CustomerBirthday[]; loading: boolean
   onSend: (p: CustomerBirthday) => void; onDelete: (p: CustomerBirthday) => void
-}> = ({ people, loading, showDob, onSend, onDelete }) => {
+}> = ({ people, loading, onSend, onDelete }) => {
   if (loading) return <p className="text-[12px] text-gray-500 p-3">Loading…</p>
   if (!people.length) return <p className="text-[12px] text-gray-500 p-3">No birthdays found for this range.</p>
   return (
@@ -51,7 +75,7 @@ const PeopleList: React.FC<{
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-black text-[#111111] truncate">{p.name || 'Customer'}</p>
             <p className="text-[11px] text-gray-500">
-              {formatPhoneDisplay(p.phone)} · {showDob ? formatBirthDate(p.birth_date) : formatBirthDate(p.birth_date).slice(0, 5)}
+              {formatPhoneDisplay(p.phone)} · {formatBirthDate(p.birth_date)}
             </p>
           </div>
           <button type="button" onClick={() => onSend(p)} className="flex items-center gap-1 px-3 h-8 rounded-lg bg-[#059669] text-white text-[10px] font-black uppercase"><MessageCircle size={13} /> Send Offer</button>
@@ -70,7 +94,6 @@ export const BirthdaysView: React.FC = () => {
 
   const today = new Date()
   const [month, setMonth] = useState(today.getMonth())
-  const [year, setYear] = useState(today.getFullYear())
   const [range, setRange] = useState<BirthdayRange>('all')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -100,22 +123,15 @@ export const BirthdaysView: React.FC = () => {
   const byMonthDay = useMemo(() => {
     const m = new Map<string, CustomerBirthday[]>()
     for (const p of people) {
-      const key = p.birth_date.slice(5)
+      const key = birthMonthDay(p.birth_date)
       m.set(key, [...(m.get(key) || []), p])
     }
     return m
   }, [people])
 
-  const cells = useMemo(() => {
-    const first = new Date(year, month, 1).getDay()
-    const days = new Date(year, month + 1, 0).getDate()
-    return [...Array(first).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)] as Array<number | null>
-  }, [month, year])
+  const monthDays = DAYS_IN_MONTH[month]
 
-  const shiftMonth = (delta: number) => {
-    const d = new Date(year, month + delta, 1)
-    setMonth(d.getMonth()); setYear(d.getFullYear())
-  }
+  const shiftMonth = (delta: number) => setMonth(m => (m + delta + 12) % 12)
 
   const previewName = filtered[0]?.name || 'Aarav'
   const preview = buildBirthdayMessage(template, previewName, offer?.label || '')
@@ -152,12 +168,11 @@ export const BirthdaysView: React.FC = () => {
 
   const exportCsv = () => {
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`
-    const rows = [['Customer', 'Mobile', 'Date of Birth'], ...filtered.map(p => [p.name, p.phone, formatBirthDate(p.birth_date)])]
+    const rows = [['Customer', 'Mobile', 'Birthday (DD/MM)'], ...filtered.map(p => [p.name, p.phone, formatBirthDate(p.birth_date)])]
     void downloadCsv('birthdays.csv', rows.map(r => r.map(esc).join(',')).join('\n'))
   }
 
-  const years = Array.from({ length: 11 }, (_, i) => today.getFullYear() - 5 + i)
-  const todayIso = toIsoDate(today)
+  const todayKey = toMonthDay(today)
 
   return (
     <div className="space-y-4">
@@ -188,26 +203,20 @@ export const BirthdaysView: React.FC = () => {
                 <select className="h-9 px-2 border border-gray-200 rounded-lg text-[12px] font-bold" value={month} onChange={e => setMonth(Number(e.target.value))}>
                   {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                 </select>
-                <select className="h-9 px-2 border border-gray-200 rounded-lg text-[12px] font-bold" value={year} onChange={e => setYear(Number(e.target.value))}>
-                  {years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
                 <div className="ml-auto flex gap-1">
                   <button type="button" aria-label="Previous month" onClick={() => shiftMonth(-1)} className="w-8 h-8 border border-gray-200 rounded-lg flex items-center justify-center"><ChevronLeft size={14} /></button>
-                  <button type="button" onClick={() => { setMonth(today.getMonth()); setYear(today.getFullYear()) }} className="px-2 h-8 border border-gray-200 rounded-lg text-[11px] font-bold">Today</button>
+                  <button type="button" onClick={() => setMonth(today.getMonth())} className="px-2 h-8 border border-gray-200 rounded-lg text-[11px] font-bold">Today</button>
                   <button type="button" aria-label="Next month" onClick={() => shiftMonth(1)} className="w-8 h-8 border border-gray-200 rounded-lg flex items-center justify-center"><ChevronRight size={14} /></button>
                 </div>
               </div>
               <div className="grid grid-cols-7 gap-1 text-center">
-                {WEEKDAYS.map((w, i) => <div key={i} className="text-[10px] font-black text-gray-400 py-1">{w}</div>)}
-                {cells.map((d, i) => {
-                  if (!d) return <div key={i} />
-                  const md = `${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                {Array.from({ length: monthDays }, (_, i) => i + 1).map(d => {
+                  const md = `${pad2(month + 1)}-${pad2(d)}`
                   const has = byMonthDay.has(md)
-                  const iso = `${year}-${md}`
                   return (
-                    <button key={i} type="button" onClick={() => { setRange('all'); setFrom(iso); setTo(iso) }}
+                    <button key={d} type="button" onClick={() => { setRange('all'); setFrom(md); setTo(md) }}
                       title={has ? byMonthDay.get(md)!.map(p => p.name || p.phone).join(', ') : undefined}
-                      className={`h-8 rounded-md border text-[11px] font-bold flex flex-col items-center justify-center leading-none ${iso === todayIso ? 'border-[#D4AF37] bg-[#FDF6E3]' : 'border-gray-200 hover:bg-gray-50'} ${from === iso && to === iso ? 'ring-2 ring-[#B38018]' : ''}`}>
+                      className={`h-8 rounded-md border text-[11px] font-bold flex flex-col items-center justify-center leading-none ${md === todayKey ? 'border-[#D4AF37] bg-[#FDF6E3]' : 'border-gray-200 hover:bg-gray-50'} ${from === md && to === md ? 'ring-2 ring-[#B38018]' : ''}`}>
                       {d}
                       {has && <span className="w-1 h-1 rounded-full bg-red-500 mt-0.5" />}
                     </button>
@@ -274,7 +283,7 @@ export const BirthdaysView: React.FC = () => {
             <DateFilter range={range} from={from} to={to} onRange={applyRange} onFrom={setCustomFrom} onTo={setCustomTo} />
           </div>
           <div className={`${card} p-2 md:p-4`}>
-            <PeopleList people={filtered} loading={loading} onSend={sendOffer} onDelete={remove} showDob />
+            <PeopleList people={filtered} loading={loading} onSend={sendOffer} onDelete={remove} />
           </div>
         </div>
       )}

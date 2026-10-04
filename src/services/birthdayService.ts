@@ -14,7 +14,7 @@ export interface BirthdayOffer {
   label: string
 }
 
-export type BirthdayRange = 'today' | 'week' | 'month' | 'year' | 'all'
+export type BirthdayRange = 'today' | 'week' | 'month' | 'all'
 
 const LOCAL_KEY = 'universallook_birthdays_v1'
 const OFFERS_KEY = 'universallook_birthday_offers_v1'
@@ -83,47 +83,37 @@ export const birthdayService = {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
-export const toIsoDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-/** DD/MM/YYYY for display. */
+/** "MM-DD" key for a Date. Birthdays are matched on month and day only; the year is never used. */
+export const toMonthDay = (d: Date) => `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+/** "MM-DD" part of a stored YYYY-MM-DD birth date. */
+export const birthMonthDay = (iso: string) => iso.slice(5, 10)
+
+/** DD/MM for display (year intentionally omitted). */
 export const formatBirthDate = (iso: string) => {
-  const [y, m, d] = iso.split('-')
-  return y && m && d ? `${d}/${m}/${y}` : iso
+  const [, m, d] = iso.split('-')
+  return m && d ? `${d}/${m}` : iso
 }
 
-/** Next date (>= today) on which this birthday falls, ignoring birth year. */
-export const nextBirthday = (iso: string, today = new Date()): Date => {
-  const [, m, d] = iso.split('-').map(Number)
-  const base = new Date(today.getFullYear(), 0, 1)
-  const make = (year: number) => {
-    // Feb 29 → Feb 28 on non-leap years
-    const dt = new Date(year, m - 1, d)
-    return dt.getMonth() !== m - 1 ? new Date(year, m - 1, d - 1) : dt
-  }
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-  let next = make(base.getFullYear())
-  if (next < startOfToday) next = make(base.getFullYear() + 1)
-  return next
+/** Whether a "MM-DD" key falls in [from, to] (both "MM-DD", either may be empty). Ranges may wrap over New Year. */
+export const monthDayInWindow = (key: string, from: string, to: string) => {
+  const f = from || '01-01'
+  const t = to || '12-31'
+  return f <= t ? key >= f && key <= t : key >= f || key <= t
 }
 
-/** Whether the birthday's next occurrence falls in [from, to] (inclusive, ISO dates; either may be empty). */
-export const birthdayInWindow = (iso: string, from: string, to: string, today = new Date()) => {
-  const next = toIsoDate(nextBirthday(iso, today))
-  if (from && next < from) return false
-  if (to && next > to) return false
-  return true
-}
+export const birthdayInWindow = (iso: string, from: string, to: string) =>
+  monthDayInWindow(birthMonthDay(iso), from, to)
 
 export const rangeToDates = (range: BirthdayRange, today = new Date()): { from: string; to: string } => {
-  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   switch (range) {
-    case 'today': return { from: toIsoDate(t), to: toIsoDate(t) }
-    case 'week': return { from: toIsoDate(t), to: toIsoDate(new Date(t.getFullYear(), t.getMonth(), t.getDate() + 6)) }
-    case 'month': return {
-      from: toIsoDate(new Date(t.getFullYear(), t.getMonth(), 1)),
-      to: toIsoDate(new Date(t.getFullYear(), t.getMonth() + 1, 0)),
+    case 'today': return { from: toMonthDay(today), to: toMonthDay(today) }
+    case 'week': return { from: toMonthDay(today), to: toMonthDay(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 6)) }
+    case 'month': {
+      const last = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+      return { from: `${pad(today.getMonth() + 1)}-01`, to: `${pad(today.getMonth() + 1)}-${pad(last)}` }
     }
-    case 'year': return { from: toIsoDate(t), to: `${t.getFullYear()}-12-31` }
     default: return { from: '', to: '' }
   }
 }
