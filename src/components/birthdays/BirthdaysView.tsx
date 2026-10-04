@@ -8,6 +8,7 @@ import { toWhatsAppUrl, formatPhoneDisplay } from '../../lib/phone'
 import { downloadCsv } from '../../lib/exportCsv'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] // Feb includes the 29th
 const pad2 = (n: number) => String(n).padStart(2, '0')
 const RANGES: Array<{ key: BirthdayRange; label: string }> = [
@@ -19,7 +20,7 @@ const input = 'w-full h-10 px-3 bg-white border border-gray-200 rounded-xl text-
 
 const MonthDayPicker: React.FC<{ label: string; value: string; onChange: (v: string) => void }> = ({ label, value, onChange }) => {
   const [m, d] = value ? value.split('-').map(Number) : [0, 0]
-  const sel = 'h-10 px-2 bg-white border border-gray-200 rounded-xl text-[13px] font-bold text-[#111111] focus:outline-none focus:border-[#D4AF37] min-w-0 flex-1'
+  const sel = 'h-10 pl-3 pr-1 bg-white border border-gray-200 rounded-xl text-[13px] font-bold text-[#111111] focus:outline-none focus:border-[#D4AF37] min-w-0'
   const setMonthPart = (nm: number) => {
     if (!nm) return onChange('')
     onChange(`${pad2(nm)}-${pad2(Math.min(d || 1, DAYS_IN_MONTH[nm - 1]))}`)
@@ -28,10 +29,10 @@ const MonthDayPicker: React.FC<{ label: string; value: string; onChange: (v: str
   return (
     <div>
       <span className="block text-[10px] font-black text-[#6B7280] mb-1">{label}</span>
-      <div className="flex gap-1.5">
+      <div className="grid grid-cols-[3fr_2fr] gap-2">
         <select aria-label={`${label} month`} className={sel} value={m} onChange={e => setMonthPart(Number(e.target.value))}>
           <option value={0}>Month</option>
-          {MONTHS.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+          {MONTHS_LONG.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
         </select>
         <select aria-label={`${label} day`} className={sel} value={d} disabled={!m} onChange={e => setDayPart(Number(e.target.value))}>
           <option value={0}>Day</option>
@@ -55,7 +56,7 @@ const DateFilter: React.FC<{
         </button>
       ))}
     </div>
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-1 gap-3">
       <MonthDayPicker label="FROM" value={from} onChange={onFrom} />
       <MonthDayPicker label="TO" value={to} onChange={onTo} />
     </div>
@@ -196,7 +197,7 @@ export const BirthdaysView: React.FC = () => {
       {error && <p className="text-[12px] font-bold text-red-600">{error}</p>}
 
       {tab === 'calendar' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 items-start">
           <div className="space-y-4">
             <div className={`${card} p-4`}>
               <div className="flex items-center gap-2 mb-3">
@@ -226,17 +227,22 @@ export const BirthdaysView: React.FC = () => {
               <p className="mt-3 text-[10px] text-gray-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" /> Dot = birthday</p>
             </div>
             <div className={`${card} p-4`}>
-              <p className="text-[12px] font-black text-[#111111] mb-2">Filter by date</p>
+              <p className="text-[12px] font-black text-[#111111] mb-2">Step 1 · Pick a date or range</p>
               <DateFilter range={range} from={from} to={to} onRange={applyRange} onFrom={setCustomFrom} onTo={setCustomTo} />
             </div>
           </div>
 
           <div className="space-y-4">
             <div className={`${card} p-4 md:p-5`}>
+              <h3 className="text-[14px] font-black text-[#111111]">Step 2 · Customers with birthdays ({filtered.length})</h3>
+              <p className="text-[11px] text-gray-500 mb-3">Pick a date or range on the left, then tap Send Offer on a customer.</p>
+              <PeopleList people={filtered} loading={loading} onSend={sendOffer} onDelete={remove} />
+            </div>
+            <div className={`${card} p-4 md:p-5`}>
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-9 h-9 rounded-lg bg-[#FDF6E3] flex items-center justify-center text-[#B38018]"><Gift size={18} /></div>
                 <div className="flex-1">
-                  <h3 className="text-[15px] font-black text-[#111111]">Birthday Offer Message</h3>
+                  <h3 className="text-[15px] font-black text-[#111111]">Step 3 · Customise offer message</h3>
                   <p className="text-[11px] text-gray-500">Sent on WhatsApp when you tap "Send Offer".</p>
                 </div>
                 <button type="button" onClick={saveTemplate} disabled={!dirty}
@@ -266,10 +272,6 @@ export const BirthdaysView: React.FC = () => {
               </div>
             </div>
 
-            <div className={`${card} p-4 md:p-5`}>
-              <h3 className="text-[14px] font-black text-[#111111] mb-3">Birthdays in selected dates ({filtered.length})</h3>
-              <PeopleList people={filtered} loading={loading} onSend={sendOffer} onDelete={remove} />
-            </div>
           </div>
         </div>
       ) : (
