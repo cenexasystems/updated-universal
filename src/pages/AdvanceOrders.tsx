@@ -63,8 +63,6 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
   const [paymentForm, setPaymentForm] = useState({ method: 'cash' as AdvancePaymentMethod, remarks: '' })
   const [depositSplit, setDepositSplit] = useState<SplitInputValue>(emptySplitInput())
   const [finalSplit, setFinalSplit] = useState<SplitInputValue>(emptySplitInput())
-  const [manualDiscount, setManualDiscount] = useState('')
-  const [manualDiscountType, setManualDiscountType] = useState<'rm' | '%'>('rm')
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -180,40 +178,28 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
     try { const updated = await updateAdvanceStatus(order.id, status); setOrders(rows => rows.map(row => row.id === order.id ? updated : row)); if (selected?.id === order.id) void openDetails(updated) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to update status') }
   }
 
-  const finalAmountFor = (order: AdvanceOrder) => {
-    const manualDiscountNum = Math.max(0, Number(manualDiscount) || 0)
-    const manualDisc = manualDiscountType === '%'
-      ? Math.round(order.remaining_balance * (manualDiscountNum / 100) * 100) / 100
-      : manualDiscountNum
-    return Math.max(0, order.remaining_balance - manualDisc)
-  }
+  const finalAmountFor = (order: AdvanceOrder) => order.remaining_balance
 
   const receivePayment = async (event: FormEvent) => {
     event.preventDefault(); if (!paymentOrder) return; setSaving(true); setError('')
     try {
-      const manualDiscountNum = Math.max(0, Number(manualDiscount) || 0)
-      const manualDisc = manualDiscountType === '%'
-        ? Math.round(paymentOrder.remaining_balance * (manualDiscountNum / 100) * 100) / 100
-        : manualDiscountNum
-      const finalAmount = Math.max(0, paymentOrder.remaining_balance - manualDisc)
+      const finalAmount = paymentOrder.remaining_balance
       if (paymentForm.method === 'split' && Math.abs(splitTotal(splitInputToDetails(finalSplit)) - finalAmount) >= 0.01) {
         setError(`Split amounts must add up to the final amount of ${formatCurrency(finalAmount)}.`); setSaving(false); return
       }
-      const parts = [paymentForm.remarks]
-      if (manualDisc > 0) parts.push(`Manual Discount: ${manualDiscountType === '%' ? manualDiscountNum + '%' : '₹' + manualDiscountNum.toFixed(2)} = -INR ${manualDisc.toFixed(2)}`)
-      const remarksWithCoupon = parts.filter(Boolean).join(' | ')
+      const remarksWithCoupon = paymentForm.remarks
       const result = await completeAdvanceOrder(
         paymentOrder.id, 
         paymentForm.method, 
         finalAmount,
         null,
         0,
-        manualDisc,
+        0,
         remarksWithCoupon,
         paymentForm.method === 'split' ? splitInputToDetails(finalSplit) : undefined
       )
       const completed: AdvanceOrder = { ...paymentOrder, status: 'completed', remaining_balance: finalAmount, completed_at: result.completed_at, completed_order_id: result.order_id, invoice_number: result.invoice_no, final_payment_method: paymentForm.method, split_details: result.split_details }
-      setOrders(rows => rows.map(row => row.id === completed.id ? completed : row)); onOrderCompleted?.(completed); setPaymentOrder(null); setPaymentForm({ method: 'cash', remarks: '' }); setFinalSplit(emptySplitInput()); setManualDiscount(''); setManualDiscountType('rm'); setNotice(`${result.invoice_no} generated once. The full ${formatCurrency(completed.total_amount)} is now recognized as revenue.`)
+      setOrders(rows => rows.map(row => row.id === completed.id ? completed : row)); onOrderCompleted?.(completed); setPaymentOrder(null); setPaymentForm({ method: 'cash', remarks: '' }); setFinalSplit(emptySplitInput()); setNotice(`${result.invoice_no} generated once. The full ${formatCurrency(completed.total_amount)} is now recognized as revenue.`)
 
       // Redirect to WhatsApp with final invoice URL + Instagram + Feedback form
       whatsappInvoice(completed)
@@ -451,36 +437,10 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
             </button>
           </div>
           <div className="mb-6 rounded-2xl bg-emerald-50 py-5 text-center">
-            {(() => {
-              const manualNum = Math.max(0, Number(manualDiscount) || 0);
-              const manualDisc = manualDiscountType === '%' ? Math.round(paymentOrder.remaining_balance * (manualNum / 100) * 100) / 100 : manualNum;
-              const finalAmt = Math.max(0, paymentOrder.remaining_balance - manualDisc);
-              return (
-                <>
-                  <p className="text-[11px] font-black uppercase tracking-widest text-emerald-600">Remaining Amount</p>
-                  <p className={`mt-1 font-black text-emerald-800 ${manualDisc > 0 ? 'text-xl line-through opacity-60' : 'text-4xl'}`}>{formatCurrency(paymentOrder.remaining_balance)}</p>
-                  {manualDisc > 0 && (
-                    <>
-                      <div className="mt-2 space-y-0.5 text-xs text-emerald-700">
-                        {manualDisc > 0 && <p>Manual Discount: -{formatCurrency(manualDisc)}</p>}
-                      </div>
-                      <p className="mt-3 text-3xl font-black text-emerald-950">You Pay: {formatCurrency(finalAmt)}</p>
-                    </>
-                  )}
-                </>
-              )
-            })()}
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-600">Remaining Amount</p>
+            <p className="mt-1 text-4xl font-black text-emerald-800">{formatCurrency(paymentOrder.remaining_balance)}</p>
           </div>
           <div className="space-y-4">
-            <Field label="Manual Discount">
-              <div className="flex gap-2 items-center">
-                <select value={manualDiscountType} onChange={e=>setManualDiscountType(e.target.value as 'rm'|'%')} className="rounded-xl border border-[#F3F4F6] bg-white px-3 py-2.5 text-sm font-black text-[#1F1F1F] outline-none focus:border-[#6B7280] focus:ring-2 focus:ring-gray-100 cursor-pointer">
-                  <option value="rm">₹</option>
-                  <option value="%">%</option>
-                </select>
-                <input type="number" min="0" step="0.01" className={`${inputClass} flex-1`} value={manualDiscount} onChange={e=>setManualDiscount(e.target.value)} placeholder="0" />
-              </div>
-            </Field>
             <Field label="Payment Method">
               <select className={inputClass} value={paymentForm.method} onChange={e=>setPaymentForm({...paymentForm,method:e.target.value as AdvancePaymentMethod})}>
                 <option value="cash">Cash</option>

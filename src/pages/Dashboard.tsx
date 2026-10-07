@@ -333,7 +333,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (role === 'staff') {
-      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'history']
+      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'birthdays', 'expenses', 'history']
       if (!staffAllowedTabs.includes(tab)) {
         setTab('billing')
         navigate('/dashboard', { replace: true })
@@ -343,7 +343,7 @@ export default function Dashboard() {
 
   const handleTabClick = (tabKey: TabKey) => {
     if (role === 'staff') {
-      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'history']
+      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'birthdays', 'expenses', 'history']
       if (!staffAllowedTabs.includes(tabKey)) return
     }
     setTab(tabKey)
@@ -1786,6 +1786,8 @@ export default function Dashboard() {
         { id: 'billing',        icon: <ShoppingCart size={18} />, label: 'Billing Panel' },
         { id: 'inventory',      icon: <Layers size={18} />,       label: 'Inventory' },
         { id: 'advance_orders', icon: <FileText size={18} />,     label: 'Advance Orders' },
+        { id: 'birthdays',      icon: <Gift size={18} />,         label: 'Birthdays' },
+        { id: 'expenses',       icon: <Receipt size={18} />,      label: 'Expenses' },
         { id: 'history',        icon: <List size={18} />,         label: 'Order History' },
       ]
     : [
@@ -4682,7 +4684,7 @@ export default function Dashboard() {
         )}
 
         {/* ── BIRTHDAYS TAB ── */}
-        {tab === 'birthdays' && role === 'admin' && (
+        {tab === 'birthdays' && (
           <BirthdaysView />
         )}
         {/* Footer: sits at the end of the scrolling content, visible only when scrolled to the bottom */}
