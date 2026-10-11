@@ -686,8 +686,8 @@ export default function Pos(props: PosProps = {}) {
       let allocated = 0
       const productsSnapshot = items.map((item, index) => {
         const lineTotal = index === items.length - 1
-          ? Math.max(0, Math.round((total - allocated) * 100) / 100)
-          : Math.max(0, Math.round((allocationBase > 0 ? total * item.lineTotal / allocationBase : total / items.length) * 100) / 100)
+          ? Math.max(0, Math.round((subtotal - allocated) * 100) / 100)
+          : Math.max(0, Math.round((allocationBase > 0 ? subtotal * item.lineTotal / allocationBase : subtotal / items.length) * 100) / 100)
         allocated += lineTotal
         return {
           product_id: item.parentProductId || toProductId(item.id), variant_id: item.variantId || null,
@@ -705,6 +705,15 @@ export default function Pos(props: PosProps = {}) {
         totalAmount: total, depositAmount, expectedDeliveryDate: depositForm.expectedDeliveryDate,
         remarks: depositForm.remarks, paymentMethod: depositForm.paymentMethod, createdByName: role || 'Staff',
         products: productsSnapshot,
+        // total = subtotal - discount + GST + delivery; keep the parts so receipts / invoice can show them
+        breakdown: {
+          subtotal: Math.round(subtotal * 100) / 100,
+          deliveryCharge: Math.max(0, Number(shipping || 0) || 0),
+          discount: Math.round((subtotal - discountedSubtotal) * 100) / 100,
+          gstRate: totalGst > 0 ? (gstType === 'percent' ? Math.max(0, Number(gstInput) || 0) : Math.round((totalGst / Math.max(discountedSubtotal, 0.01)) * 10000) / 100) : 0,
+          cgst: Math.round((totalGst / 2) * 100) / 100,
+          sgst: Math.round((totalGst - Math.round((totalGst / 2) * 100) / 100) * 100) / 100,
+        },
         splitDetails: depositForm.paymentMethod === 'split' ? splitInputToDetails(depositSplit) : undefined,
       })
       setDepositCreated(created)

@@ -79,15 +79,14 @@ export const isUuid = (value: unknown): value is string =>
 export const formatInvoiceNo = (invNo: unknown): string => {
   const raw = String(invNo || '').trim()
   const base = raw.replace(/^INV/i, '')
-  if (!base) return 'INV001'
+  if (!base) return 'INV00000001'
   if (/^\d{8}$/.test(base)) return `INV${base}` // legacy 8-digit invoices
-  if (/^\d{1,7}$/.test(base)) return `INV${base.padStart(3, '0')}` // sequential: 001, 002 ...
 
   const matchDigits = base.match(/\d+/g)
   if (matchDigits) {
     const joined = matchDigits.join('')
     if (joined.length >= 8) return `INV${joined.slice(-8)}`
-    return `INV${joined.padStart(3, '0')}`
+    return `INV${joined.padStart(8, '0')}`
   }
 
   let hash = 0

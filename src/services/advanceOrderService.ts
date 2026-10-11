@@ -129,14 +129,14 @@ const breakdownColumns = (b: NonNullable<Parameters<typeof createAdvanceOrder>[0
   subtotal_amount: b.subtotal, delivery_charge: b.deliveryCharge, discount_amount: b.discount, gst_rate: b.gstRate, cgst_amount: b.cgst, sgst_amount: b.sgst,
 })
 
-/** Offline fallback: sequential 001, 002... kept per browser (the database sequence is used when online). */
+/** Offline fallback: sequential 00000001, 00000002... kept per browser (the database sequence is used when online). */
 const nextLocalInvoiceSeq = (): string => {
   let next = 1
   try {
     next = (Number(localStorage.getItem('universal_look_invoice_seq_v1')) || 0) + 1
     localStorage.setItem('universal_look_invoice_seq_v1', String(next))
   } catch { /* ignore */ }
-  return String(next).padStart(3, '0')
+  return String(next).padStart(8, '0')
 }
 
 const rpcRow = (data: unknown) => (Array.isArray(data) ? data[0] : data) as Record<string, unknown>
