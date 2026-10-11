@@ -645,6 +645,14 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
             <div className="flex gap-2">
               <button
                 type="button"
+                onClick={() => void (selected.status === 'completed' ? printFinal(selected) : printReceipt(selected))}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-100 cursor-pointer transition shadow-xs"
+                title={selected.status === 'completed' ? 'Print Final Receipt' : 'Print Advance Receipt'}
+              >
+                <Printer size={14} /> Print
+              </button>
+              <button
+                type="button"
                 onClick={() => void downloadReceipt(selected)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-100 cursor-pointer transition shadow-xs"
                 title={selected.status === 'completed' ? 'Download PDF Invoice' : 'Download PDF Receipt'}

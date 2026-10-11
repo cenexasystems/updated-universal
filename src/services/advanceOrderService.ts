@@ -129,6 +129,16 @@ const breakdownColumns = (b: NonNullable<Parameters<typeof createAdvanceOrder>[0
   subtotal_amount: b.subtotal, delivery_charge: b.deliveryCharge, discount_amount: b.discount, gst_rate: b.gstRate, cgst_amount: b.cgst, sgst_amount: b.sgst,
 })
 
+/** Offline fallback: sequential 001, 002... kept per browser (the database sequence is used when online). */
+const nextLocalInvoiceSeq = (): string => {
+  let next = 1
+  try {
+    next = (Number(localStorage.getItem('universal_look_invoice_seq_v1')) || 0) + 1
+    localStorage.setItem('universal_look_invoice_seq_v1', String(next))
+  } catch { /* ignore */ }
+  return String(next).padStart(3, '0')
+}
+
 const rpcRow = (data: unknown) => (Array.isArray(data) ? data[0] : data) as Record<string, unknown>
 
 export async function deleteAdvanceOrder(orderId: string): Promise<void> {
@@ -404,8 +414,7 @@ export async function completeAdvanceOrder(
   const now = new Date().toISOString()
 
   if (!result) {
-    const seq = String(Math.floor(10000000 + Math.random() * 89999999))
-    const invoiceNo = `INV${seq}`
+    const invoiceNo = `INV${nextLocalInvoiceSeq()}`
     const completedOrderId = crypto.randomUUID ? crypto.randomUUID() : `ord_${Date.now()}_${Math.random().toString(36).slice(2)}`
     result = { order_id: completedOrderId, invoice_no: invoiceNo, completed_at: now }
   }
