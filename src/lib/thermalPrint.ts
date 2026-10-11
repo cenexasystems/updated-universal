@@ -20,6 +20,11 @@ export interface ThermalReceiptData {
   couponDiscount?: number
   manualDiscount?: number
   totalGst?: number
+  /** When either is set they replace the single GST row. */
+  cgst?: number
+  sgst?: number
+  /** Extra lines under the Total (e.g. deposit paid / balance paid / remaining for advance orders). */
+  paymentRows?: Array<{ label: string; value: number; sub?: boolean; accent?: boolean }>
   total: number
   storeName?: string
   storePhone?: string
@@ -150,7 +155,16 @@ export function printThermalReceipt(data: ThermalReceiptData) {
                 <td class="text-right">-${formatCurrency(data.manualDiscount || 0)}</td>
               </tr>
             ` : ''}
-            ${(data.totalGst || 0) > 0 ? `
+            ${(data.cgst || 0) > 0 || (data.sgst || 0) > 0 ? `
+              <tr>
+                <td class="text-left">CGST</td>
+                <td class="text-right">+${formatCurrency(data.cgst || 0)}</td>
+              </tr>
+              <tr>
+                <td class="text-left">SGST</td>
+                <td class="text-right">+${formatCurrency(data.sgst || 0)}</td>
+              </tr>
+            ` : (data.totalGst || 0) > 0 ? `
               <tr>
                 <td class="text-left">GST</td>
                 <td class="text-right">+${formatCurrency(data.totalGst || 0)}</td>
@@ -166,6 +180,12 @@ export function printThermalReceipt(data: ThermalReceiptData) {
               <td class="text-left">Total</td>
               <td class="text-right">${formatCurrency(data.total)}</td>
             </tr>
+            ${(data.paymentRows || []).map(row => `
+              <tr style="${row.sub ? 'font-size: 10px; color: #444;' : row.accent ? 'font-weight: bold;' : ''}">
+                <td class="text-left">${row.sub ? '&nbsp;&nbsp;' : ''}${row.label}</td>
+                <td class="text-right">${formatCurrency(row.value)}</td>
+              </tr>
+            `).join('')}
           </table>
         </div>
 

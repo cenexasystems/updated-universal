@@ -14,7 +14,15 @@ export type AdvanceOrder = {
   products: Array<Record<string, unknown>>
   category: string
   description: string
+  /** Grand total (items + delivery + GST - discount). Deposit / balance are tracked against this. */
   total_amount: number
+  /** Item value before delivery, GST and discount. 0 on orders created before the breakdown existed. */
+  subtotal_amount?: number
+  delivery_charge?: number
+  discount_amount?: number
+  gst_rate?: number
+  cgst_amount?: number
+  sgst_amount?: number
   deposit_amount: number
   remaining_balance: number
   expected_delivery_date: string
@@ -96,6 +104,12 @@ const normalizeOrder = (row: Record<string, unknown>): AdvanceOrder => ({
   category: String(row.category || ''),
   description: String(row.description || ''),
   total_amount: Number(row.total_amount || 0),
+  subtotal_amount: Number(row.subtotal_amount || 0),
+  delivery_charge: Number(row.delivery_charge || 0),
+  discount_amount: Number(row.discount_amount || 0),
+  gst_rate: Number(row.gst_rate || 0),
+  cgst_amount: Number(row.cgst_amount || 0),
+  sgst_amount: Number(row.sgst_amount || 0),
   deposit_amount: Number(row.deposit_amount || 0),
   remaining_balance: Number(row.remaining_balance ?? (Number(row.total_amount || 0) - Number(row.deposit_amount || 0))),
   expected_delivery_date: String(row.expected_delivery_date || ''),
@@ -109,6 +123,10 @@ const normalizeOrder = (row: Record<string, unknown>): AdvanceOrder => ({
   completed_order_id: row.completed_order_id ? String(row.completed_order_id) : null,
   invoice_number: row.invoice_number ? String(row.invoice_number) : null,
   final_payment_method: row.final_payment_method ? String(row.final_payment_method) : null,
+})
+
+const breakdownColumns = (b: NonNullable<Parameters<typeof createAdvanceOrder>[0]['breakdown']>) => ({
+  subtotal_amount: b.subtotal, delivery_charge: b.deliveryCharge, discount_amount: b.discount, gst_rate: b.gstRate, cgst_amount: b.cgst, sgst_amount: b.sgst,
 })
 
 const rpcRow = (data: unknown) => (Array.isArray(data) ? data[0] : data) as Record<string, unknown>
@@ -173,6 +191,8 @@ export async function createAdvanceOrder(input: {
   totalAmount: number; depositAmount: number; expectedDeliveryDate: string; remarks: string; referenceNumber?: string
   paymentMethod: AdvancePaymentMethod; createdByName: string; products?: Array<Record<string, unknown>>
   splitDetails?: SplitDetails
+  /** Price breakdown; totalAmount must equal subtotal + delivery + GST - discount. */
+  breakdown?: { subtotal: number; deliveryCharge: number; discount: number; gstRate: number; cgst: number; sgst: number }
 }): Promise<AdvanceOrder> {
   if (input.paymentMethod === 'split') {
     if (Math.abs(splitTotal(parseSplit(input.splitDetails)) - Number(input.depositAmount)) >= 0.01) {
@@ -196,16 +216,19 @@ export async function createAdvanceOrder(input: {
         console.error('[createAdvanceOrder] Supabase error:', error.message)
       } else if (data) {
         createdOrder = normalizeOrder(rpcRow(data))
-        // Patch reference_number (not in RPC params)
-        if ((input.referenceNumber || '').trim()) {
-          const { error: referenceError } = await supabase.from('advance_orders').update({ reference_number: (input.referenceNumber || '').trim() }).eq('id', createdOrder.id)
-          if (referenceError) throw new Error(referenceError.message)
-          createdOrder.reference_number = (input.referenceNumber || '').trim()
+        // Patch columns that are not RPC params (reference number + price breakdown)
+        const patch: Record<string, unknown> = {}
+        if ((input.referenceNumber || '').trim()) patch.reference_number = (input.referenceNumber || '').trim()
+        if (input.breakdown) Object.assign(patch, breakdownColumns(input.breakdown))
+        if (Object.keys(patch).length > 0) {
+          const { error: patchError } = await supabase.from('advance_orders').update(patch).eq('id', createdOrder.id)
+          if (patchError) throw new Error(patchError.message)
+          createdOrder = { ...createdOrder, ...patch } as AdvanceOrder
         }
       }
     } catch (err) {
       console.error('[createAdvanceOrder] Exception:', err)
-      if (createdOrder) throw new Error(`Advance order was created, but its reference number could not be saved: ${err instanceof Error ? err.message : String(err)}`)
+      if (createdOrder) throw new Error(`Advance order was created, but its reference number / price breakdown could not be saved (run the latest Supabase migration): ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -227,6 +250,7 @@ export async function createAdvanceOrder(input: {
       category: input.category.trim(),
       description: input.description.trim(),
       total_amount: Number(input.totalAmount),
+      ...(input.breakdown ? breakdownColumns(input.breakdown) : {}),
       deposit_amount: Number(input.depositAmount),
       remaining_balance: Number(input.totalAmount) - Number(input.depositAmount),
       expected_delivery_date: input.expectedDeliveryDate,

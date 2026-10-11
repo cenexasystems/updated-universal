@@ -18,6 +18,11 @@ export type InvoicePdfData = {
   discountAmount?: number
   manualDiscountAmount?: number
   gstAmount?: number
+  /** When both are set they replace the single GST row. */
+  cgstAmount?: number
+  sgstAmount?: number
+  /** Extra lines under the TOTAL (e.g. deposit paid / balance paid / remaining for advance orders). */
+  paymentRows?: Array<{ label: string; value: number; sub?: boolean; accent?: boolean }>
   couponCode?: string | null
   paymentMode?: string
 }
@@ -139,7 +144,10 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   const rows: Array<[string, string, string]> = [['Subtotal', money(data.subtotal), ink]]
   if ((data.discountAmount || 0) > 0) rows.push([`Coupon${data.couponCode ? ` (${data.couponCode})` : ''}`, `-${money(data.discountAmount || 0)}`, '#D4AF37'])
   if ((data.manualDiscountAmount || 0) > 0) rows.push(['Discount', `-${money(data.manualDiscountAmount || 0)}`, '#D4AF37'])
-  if ((data.gstAmount || 0) > 0) rows.push(['GST', money(data.gstAmount || 0), ink])
+  if ((data.cgstAmount || 0) > 0 || (data.sgstAmount || 0) > 0) {
+    rows.push(['CGST', money(data.cgstAmount || 0), ink])
+    rows.push(['SGST', money(data.sgstAmount || 0), ink])
+  } else if ((data.gstAmount || 0) > 0) rows.push(['GST', money(data.gstAmount || 0), ink])
   rows.push(['Delivery', (data.shipping || 0) > 0 ? money(data.shipping) : 'FREE', ink])
   doc.setFontSize(9)
   rows.forEach(([label, value, color]) => { doc.setFont('helvetica', 'normal'); doc.setTextColor(color); doc.text(label, 143, y, { align: 'right' }); doc.text(value, right - 4, y, { align: 'right' }); y += 7 })
@@ -151,6 +159,21 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   doc.setTextColor(primaryColor)
   doc.text('TOTAL', 143, y + 6, { align: 'right' })
   doc.text(money(data.total), right - 4, y + 6, { align: 'right' })
+
+  if (data.paymentRows?.length) {
+    y += 16
+    doc.setDrawColor('#F3F4F6')
+    doc.setLineWidth(0.2)
+    doc.line(130, y - 5, right, y - 5)
+    data.paymentRows.forEach(row => {
+      doc.setFont('helvetica', row.sub ? 'normal' : 'bold')
+      doc.setFontSize(row.sub ? 7 : 8)
+      doc.setTextColor(row.accent ? '#047857' : row.sub ? muted : '#374151')
+      doc.text(row.sub ? `    ${row.label}` : row.label, 166, y, { align: 'right' })
+      doc.text(money(row.value), right - 4, y, { align: 'right' })
+      y += row.sub ? 5 : 6.5
+    })
+  }
 
   y = 275
   doc.setDrawColor('#F3F4F6')

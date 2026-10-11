@@ -35,6 +35,12 @@ export type AdvanceDepositWhatsAppInput = {
   remainingBalance: number
   expectedDeliveryDate: string
   paymentMethod?: string
+  /** Optional price breakdown lines (subtotal / delivery / discount / CGST / SGST). */
+  subtotal?: number
+  deliveryCharge?: number
+  discount?: number
+  cgst?: number
+  sgst?: number
 }
 
 export const publicInvoiceUrl = (invoiceNumber: string) => {
@@ -98,7 +104,12 @@ We have successfully received your initial advance payment:
 🧾 *ADVANCE ORDER DETAILS*
 📦 *Deposit ID:* #${input.depositId}
 👔 *Product:* ${input.productName}
-💵 *Total Order Amount:* ₹${input.totalAmount}
+${input.subtotal !== undefined && input.subtotal !== input.totalAmount ? `🧮 *Subtotal:* ₹${input.subtotal}
+` : ''}${(input.discount || 0) > 0 ? `🏷️ *Discount:* -₹${input.discount}
+` : ''}${(input.cgst || 0) > 0 ? `📊 *CGST:* ₹${input.cgst}
+📊 *SGST:* ₹${input.sgst || 0}
+` : ''}${input.subtotal !== undefined ? `🚚 *Delivery:* ${(input.deliveryCharge || 0) > 0 ? `₹${input.deliveryCharge}` : 'Free'}
+` : ''}💵 *Total Order Amount:* ₹${input.totalAmount}
 💰 *Advance Paid:* ₹${input.depositAmount}${input.paymentMethod ? ` (${input.paymentMethod.toLowerCase() === 'upi' ? 'QR' : input.paymentMethod.toUpperCase()})` : ''}
 🔴 *Balance to Pay on Delivery:* ₹${input.remainingBalance}
 📅 *Expected Delivery Date:* ${deliveryDateFormatted}

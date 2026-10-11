@@ -8,7 +8,8 @@ import { invoicePdfFile } from '../lib/invoicePdf'
 import { printThermalReceipt } from '../lib/thermalPrint'
 import { buildAdvanceDepositWhatsAppMessage, buildProfessionalWhatsAppMessage, publicInvoiceUrl } from '../lib/whatsappMessage'
 import { formatPhoneDisplay, toWhatsAppUrl } from '../lib/phone'
-import { advanceReceiptPdf, downloadFile, printAdvanceReceipt } from '../lib/advanceReceipt'
+import { advanceReceiptPdf, downloadFile, paymentLines, printAdvanceReceipt } from '../lib/advanceReceipt'
+import { advanceBreakdown, advanceBreakdownRows, computeAdvanceTotals } from '../lib/advanceBreakdown'
 import { useAdminAuthStore, useProductStore } from '../store/store'
 import {
   addAdvanceEvent, completeAdvanceOrder, createAdvanceOrder, getAdvanceOrderHistory, listAdvanceOrders, updateAdvanceStatus, deleteAdvanceOrder,
@@ -33,7 +34,7 @@ const STATUS_STYLES: Record<AdvanceStatus, string> = {
   pending_deposit: 'bg-amber-50 text-amber-700 border-amber-200', ready_for_delivery: 'bg-gray-50 text-gray-700 border-gray-200',
   waiting_final_payment: 'bg-gray-50 text-gray-700 border-gray-200', completed: 'bg-emerald-50 text-emerald-700 border-emerald-200', cancelled: 'bg-red-50 text-red-700 border-red-200',
 }
-const initialForm = { customerName: '', phone: '', address: '', productName: '', category: '', description: '', totalAmount: '', depositAmount: '', expectedDeliveryDate: '', status: 'pending_deposit' as AdvanceStatus, remarks: '', reference_number: '', paymentMethod: 'cash' as AdvancePaymentMethod }
+const initialForm = { customerName: '', phone: '', address: '', productName: '', category: '', description: '', totalAmount: '', deliveryCharge: '', discount: '', gstEnabled: false, gstRate: '5', depositAmount: '', expectedDeliveryDate: '', status: 'pending_deposit' as AdvanceStatus, remarks: '', reference_number: '', paymentMethod: 'cash' as AdvancePaymentMethod }
 const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 type AdvanceOrdersProps = {
@@ -141,13 +142,16 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
     return true
   }), [orders, search, statusFilter, dateFilter])
 
+  const formTotals = useMemo(() => computeAdvanceTotals({ subtotal: Number(form.totalAmount) || 0, deliveryCharge: Number(form.deliveryCharge) || 0, discount: Number(form.discount) || 0, gstRate: form.gstEnabled ? Number(form.gstRate) || 0 : 0 }), [form.totalAmount, form.deliveryCharge, form.discount, form.gstEnabled, form.gstRate])
+
   const create = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(''); setNotice('')
-    const total = Number(form.totalAmount); const deposit = Number(form.depositAmount)
-    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(deposit) || deposit <= 0 || deposit >= total) { setError('Deposit must be greater than RM0 and less than the total order amount.'); setSaving(false); return }
+    const total = formTotals.total; const deposit = Number(form.depositAmount)
+    if (Number(form.discount) > Number(form.totalAmount)) { setError('Discount cannot be more than the item amount.'); setSaving(false); return }
+    if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(deposit) || deposit <= 0 || deposit >= total) { setError('Deposit must be greater than ₹0 and less than the total order amount.'); setSaving(false); return }
     if (form.paymentMethod === 'split' && Math.abs(splitTotal(splitInputToDetails(depositSplit)) - deposit) >= 0.01) { setError(`Split amounts must add up to the deposit of ${formatCurrency(deposit)}.`); setSaving(false); return }
     try {
-      const created = await createAdvanceOrder({ ...form, splitDetails: form.paymentMethod === 'split' ? splitInputToDetails(depositSplit) : undefined, totalAmount: total, depositAmount: deposit, referenceNumber: form.reference_number, createdByName: role || 'Staff', products: [{ name: form.productName, category: form.category, description: form.description, quantity: 1, base_price: total, line_total: total, unit: 'piece', unit_type: 'unit', source: 'advance_order' }] })
+      const created = await createAdvanceOrder({ ...form, splitDetails: form.paymentMethod === 'split' ? splitInputToDetails(depositSplit) : undefined, totalAmount: total, depositAmount: deposit, referenceNumber: form.reference_number, createdByName: role || 'Staff', breakdown: { subtotal: formTotals.subtotal, deliveryCharge: formTotals.deliveryCharge, discount: formTotals.discount, gstRate: formTotals.gstRate, cgst: formTotals.cgst, sgst: formTotals.sgst }, products: [{ name: form.productName, category: form.category, description: form.description, quantity: 1, base_price: formTotals.subtotal, line_total: formTotals.subtotal, unit: 'piece', unit_type: 'unit', source: 'advance_order' }] })
       setOrders(current => [created, ...current]); setForm(initialForm); setDepositSplit(emptySplitInput()); setCreateOpen(false); setNotice(`${created.deposit_id} created. Deposit is tracked separately and has not been added to revenue.`)
 
       // Redirect to WhatsApp with advance deposit receipt
@@ -159,6 +163,7 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
         depositAmount: created.deposit_amount,
         remainingBalance: created.remaining_balance,
         expectedDeliveryDate: created.expected_delivery_date,
+        subtotal: formTotals.subtotal, deliveryCharge: formTotals.deliveryCharge, discount: formTotals.discount, cgst: formTotals.cgst, sgst: formTotals.sgst,
         paymentMethod: form.paymentMethod === 'split' ? formatPaymentLabel('split', splitInputToDetails(depositSplit)) : form.paymentMethod,
       })
       window.open(toWhatsAppUrl(created.phone, advanceMsg), '_blank', 'noopener,noreferrer')
@@ -206,10 +211,20 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to complete payment') } finally { setSaving(false) }
   }
 
-  const productRows = (order: AdvanceOrder) => order.products.length ? order.products : [{ name: order.product_name, quantity: 1, base_price: order.total_amount, line_total: order.total_amount, unit: 'piece', unit_type: 'unit' }]
-  const invoiceFile = (order: AdvanceOrder) => invoicePdfFile({ invoiceNo: order.invoice_number || order.deposit_id, date: order.completed_at || new Date().toISOString(), customerName: order.customer_name, phone: order.phone, address: order.address, items: productRows(order), subtotal: order.total_amount, shipping: 0, total: order.total_amount, paymentMode: order.final_payment_method || 'Paid' })
-  const printFinal = (order: AdvanceOrder) => printThermalReceipt({ invoiceNo: order.invoice_number || order.deposit_id, date: order.completed_at || new Date().toISOString(), customerName: order.customer_name, phone: order.phone, items: productRows(order).map(item => ({ name: String(item.name || 'Product'), qty: Number(item.quantity || 1), unit: String(item.unit || 'piece'), price: Number(item.base_price || 0), line_total: Number(item.line_total || 0) })), subtotal: order.total_amount, shipping: 0, total: order.total_amount })
-  
+  const productRows = (order: AdvanceOrder) => order.products.length ? order.products : [{ name: order.product_name, quantity: 1, base_price: advanceBreakdown(order).subtotal, line_total: advanceBreakdown(order).subtotal, unit: 'piece', unit_type: 'unit' }]
+  const paymentsFor = async (order: AdvanceOrder) => (await getAdvanceOrderHistory(order.id)).payments
+  const finalPaymentLabel = (order: AdvanceOrder) => order.final_payment_method ? formatPaymentLabel(order.final_payment_method, order.split_details) : 'Paid'
+  const invoiceFile = async (order: AdvanceOrder) => {
+    const b = advanceBreakdown(order)
+    return invoicePdfFile({ invoiceNo: order.invoice_number || order.deposit_id, date: order.completed_at || new Date().toISOString(), customerName: order.customer_name, phone: order.phone, address: order.address, items: productRows(order), subtotal: b.subtotal, shipping: b.deliveryCharge, manualDiscountAmount: b.discount, cgstAmount: b.cgst, sgstAmount: b.sgst, total: order.total_amount, paymentMode: finalPaymentLabel(order), paymentRows: paymentLines(order, await paymentsFor(order)) })
+  }
+  const printFinal = async (order: AdvanceOrder) => {
+    const b = advanceBreakdown(order)
+    printThermalReceipt({ invoiceNo: order.invoice_number || order.deposit_id, date: order.completed_at || new Date().toISOString(), customerName: order.customer_name, phone: order.phone, items: productRows(order).map(item => ({ name: String(item.name || 'Product'), qty: Number(item.quantity || 1), unit: String(item.unit || 'piece'), price: Number(item.base_price || 0), line_total: Number(item.line_total || 0) })), subtotal: b.subtotal, shipping: b.deliveryCharge, manualDiscount: b.discount, cgst: b.cgst, sgst: b.sgst, total: order.total_amount, paymentRows: paymentLines(order, await paymentsFor(order)) })
+  }
+  const printReceipt = async (order: AdvanceOrder) => printAdvanceReceipt(order, await paymentsFor(order))
+  const downloadReceipt = async (order: AdvanceOrder) => downloadFile(order.status === 'completed' ? await invoiceFile(order) : advanceReceiptPdf(order, await paymentsFor(order)))
+
   const whatsappDepositReceipt = (order: AdvanceOrder) => {
     const message = buildAdvanceDepositWhatsAppMessage({
       customerName: order.customer_name,
@@ -219,6 +234,7 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
       depositAmount: order.deposit_amount,
       remainingBalance: order.remaining_balance,
       expectedDeliveryDate: order.expected_delivery_date,
+      subtotal: advanceBreakdown(order).subtotal, deliveryCharge: order.delivery_charge, discount: order.discount_amount, cgst: order.cgst_amount, sgst: order.sgst_amount,
     })
     window.open(toWhatsAppUrl(order.phone, message), '_blank', 'noopener,noreferrer')
   }
@@ -350,7 +366,7 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
                       {/* Print Receipt / Invoice */}
                       <button
                         type="button"
-                        onClick={() => order.status === 'completed' ? printFinal(order) : printAdvanceReceipt(order)}
+                        onClick={() => void (order.status === 'completed' ? printFinal(order) : printReceipt(order))}
                         className="w-8 h-8 rounded-lg bg-amber-50 hover:bg-amber-100 text-[#B38018] flex items-center justify-center transition-colors cursor-pointer shrink-0"
                         title={order.status === 'completed' ? "Print Final Receipt" : "Print Advance Receipt"}
                       >
@@ -360,7 +376,7 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
                       {/* Download PDF Receipt / Invoice */}
                       <button
                         type="button"
-                        onClick={() => downloadFile(order.status === 'completed' ? invoiceFile(order) : advanceReceiptPdf(order))}
+                        onClick={() => void downloadReceipt(order)}
                         className="w-8 h-8 rounded-lg bg-[#F9FAFB] hover:bg-gray-100 text-[#111111] flex items-center justify-center transition-colors cursor-pointer shrink-0"
                         title={order.status === 'completed' ? "Download PDF Invoice" : "Download PDF Receipt"}
                       >
@@ -405,9 +421,19 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
             <Field label="Product Name *" htmlFor="adv-product-name"><input id="adv-product-name" name="productName" required list="advance-products" className={inputClass} value={form.productName} onChange={e=>{const product=products.find(p=>p.name===e.target.value);setForm({...form,productName:e.target.value,category:product?.category||form.category})}}/><datalist id="advance-products">{products.map(p=><option key={p.id} value={p.name}/>)}</datalist></Field>
             <Field label="Category" htmlFor="adv-category"><input id="adv-category" name="category" className={inputClass} value={form.category} onChange={e=>setForm({...form,category:e.target.value})}/></Field>
             <Field label="Description" htmlFor="adv-description"><textarea id="adv-description" name="description" className={inputClass} value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></Field>
-            <Field label="Total Order Amount *" htmlFor="adv-total-amount"><input id="adv-total-amount" name="totalAmount" required min="0.01" step="0.01" type="number" className={inputClass} value={form.totalAmount} onChange={e=>setForm({...form,totalAmount:e.target.value})}/></Field>
+            <Field label="Item Amount (Subtotal) *" htmlFor="adv-total-amount"><input id="adv-total-amount" name="totalAmount" required min="0.01" step="0.01" type="number" className={inputClass} value={form.totalAmount} onChange={e=>setForm({...form,totalAmount:e.target.value})}/></Field>
+            <Field label="Delivery Charge" htmlFor="adv-delivery-charge"><input id="adv-delivery-charge" name="deliveryCharge" min="0" step="0.01" type="number" placeholder="0 = Free" className={inputClass} value={form.deliveryCharge} onChange={e=>setForm({...form,deliveryCharge:e.target.value})}/></Field>
+            <Field label="Discount" htmlFor="adv-discount"><input id="adv-discount" name="discount" min="0" step="0.01" type="number" placeholder="0" className={inputClass} value={form.discount} onChange={e=>setForm({...form,discount:e.target.value})}/></Field>
+            <Field label="GST (CGST + SGST)" htmlFor="adv-gst-enabled"><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-sm font-bold text-[#111111]"><input id="adv-gst-enabled" name="gstEnabled" type="checkbox" checked={form.gstEnabled} onChange={e=>setForm({...form,gstEnabled:e.target.checked})}/>Add GST</label>{form.gstEnabled && <div className="flex items-center gap-1.5"><input aria-label="GST rate %" name="gstRate" min="0" max="100" step="0.01" type="number" className={`${inputClass} w-24`} value={form.gstRate} onChange={e=>setForm({...form,gstRate:e.target.value})}/><span className="text-sm font-bold text-gray-600">%</span></div>}</div></Field>
+            <div className="md:col-span-2 rounded-2xl border border-[#D4AF37]/40 bg-[#FBFAF6] p-4 text-sm">
+              <div className="flex justify-between py-0.5"><span className="text-gray-600">Subtotal</span><b>{formatCurrency(formTotals.subtotal)}</b></div>
+              <div className="flex justify-between py-0.5"><span className="text-gray-600">Delivery Charges</span><b>{formTotals.deliveryCharge > 0 ? formatCurrency(formTotals.deliveryCharge) : 'Free (₹0)'}</b></div>
+              {formTotals.discount > 0 && <div className="flex justify-between py-0.5"><span className="text-gray-600">Discount</span><b className="text-red-600">-{formatCurrency(formTotals.discount)}</b></div>}
+              {formTotals.gstTotal > 0 && <><div className="flex justify-between py-0.5"><span className="text-gray-600">CGST ({+(formTotals.gstRate / 2).toFixed(2)}%)</span><b>{formatCurrency(formTotals.cgst)}</b></div><div className="flex justify-between py-0.5"><span className="text-gray-600">SGST ({+(formTotals.gstRate / 2).toFixed(2)}%)</span><b>{formatCurrency(formTotals.sgst)}</b></div></>}
+              <div className="mt-1.5 flex justify-between border-t border-[#D4AF37]/40 pt-2 text-base"><span className="font-black text-[#B38018]">TOTAL AMOUNT</span><b className="font-black text-[#111111]">{formatCurrency(formTotals.total)}</b></div>
+            </div>
             <Field label="Deposit Amount Received *" htmlFor="adv-deposit-amount"><input id="adv-deposit-amount" name="depositAmount" required min="0" step="0.01" type="number" className={inputClass} value={form.depositAmount} onChange={e=>setForm({...form,depositAmount:e.target.value})}/></Field>
-            <Field label="Remaining Balance (automatic)"><div className="rounded-xl bg-[#F9FAFB] px-4 py-3 font-black text-[#111111] border border-[#F3F4F6]">{formatCurrency(Math.max(0, Number(form.totalAmount||0)-Number(form.depositAmount||0)))}</div></Field>
+            <Field label="Remaining Balance (automatic)"><div className="rounded-xl bg-[#F9FAFB] px-4 py-3 font-black text-[#111111] border border-[#F3F4F6]">{formatCurrency(Math.max(0, formTotals.total-Number(form.depositAmount||0)))}</div></Field>
             <Field label="Deposit Payment Method" htmlFor="adv-payment-method"><select id="adv-payment-method" name="paymentMethod" className={inputClass} value={form.paymentMethod} onChange={e=>setForm({...form,paymentMethod:e.target.value as AdvancePaymentMethod})}><option value="cash">Cash</option><option value="upi">QR</option><option value="card">Card</option><option value="split">Split (Cash + QR)</option></select></Field>
             {form.paymentMethod === 'split' && (<div className="md:col-span-2"><SplitPaymentInputs idPrefix="adv-deposit-split" total={Number(form.depositAmount) || 0} value={depositSplit} onChange={setDepositSplit} /></div>)}
             <Field label="Expected Delivery Date *" htmlFor="adv-delivery-date"><input id="adv-delivery-date" name="deliveryDate" required type="date" className={inputClass} value={form.expectedDeliveryDate} onChange={e=>setForm({...form,expectedDeliveryDate:e.target.value})}/></Field>
@@ -507,9 +533,6 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
                 ['Address', selected.address || '-'],
                 ['Product', selected.product_name],
                 ['Category', selected.category || '-'],
-                ['Total', formatCurrency(selected.total_amount)],
-                ['Deposit Paid', formatCurrency(selected.deposit_amount)],
-                ['Remaining Balance', formatCurrency(selected.remaining_balance)],
                 ['Delivery Date', new Date(`${selected.expected_delivery_date}T00:00:00`).toLocaleDateString('en-IN')],
                 ['Created Date', new Date(selected.created_at).toLocaleDateString('en-IN')],
                 ['Created Time', new Date(selected.created_at).toLocaleTimeString('en-IN')],
@@ -523,6 +546,28 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
                   <p className="mt-1 break-words text-sm font-bold text-gray-900">{v}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="rounded-2xl border-2 border-[#D4AF37]/50 bg-[#FBFAF6] p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-wide text-[#111111]">Financial Breakdown &amp; Balance</h4>
+                <span className={`rounded border px-2 py-0.5 text-[10px] font-black uppercase ${selected.status === 'completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>{selected.status === 'completed' ? 'Fully Settled' : 'Balance Pending'}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {advanceBreakdownRows(selected).map(row => (
+                  <div key={row.label} className={`rounded-xl border p-2.5 ${row.kind === 'total' ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+                    <p className={`text-[10px] font-black uppercase ${row.kind === 'total' ? 'text-[#B38018]' : 'text-gray-500'}`}>{row.label}</p>
+                    <p className="mt-1 text-sm font-black text-gray-900">{row.kind === 'free' ? 'Free (₹0)' : `${row.kind === 'minus' ? '-' : ''}${formatCurrency(row.value)}`}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 space-y-1.5 rounded-xl border border-amber-200 bg-white p-3 text-sm">
+                {paymentLines(selected, payments).map(line => (
+                  <div key={`${line.label}-${line.sub ? 's' : 'm'}`} className={`flex justify-between ${line.sub ? 'pl-4 text-xs text-gray-500' : line.accent ? 'border-t border-amber-100 pt-1.5 font-black text-emerald-700' : 'font-bold text-gray-800'}`}>
+                    <span>{line.label}</span><span>{formatCurrency(line.value)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {selected.remarks && (
@@ -600,7 +645,7 @@ export default function AdvanceOrders({ onOrderCompleted }: AdvanceOrdersProps =
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => downloadFile(selected.status === 'completed' ? invoiceFile(selected) : advanceReceiptPdf(selected))}
+                onClick={() => void downloadReceipt(selected)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-700 hover:bg-gray-100 cursor-pointer transition shadow-xs"
                 title={selected.status === 'completed' ? 'Download PDF Invoice' : 'Download PDF Receipt'}
               >
