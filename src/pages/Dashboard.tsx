@@ -1076,6 +1076,8 @@ export default function Dashboard() {
       })),
       subtotal,
       couponDiscount: order.discount_amount,
+      manualDiscountAmount: order.manual_discount_amount,
+      gstAmount: order.total_gst,
       shipping: order.delivery_charge,
       total: order.total,
     })
@@ -1086,7 +1088,7 @@ export default function Dashboard() {
   const handlePrintReceipt = (order: DashboardOrder) => {
     const preview = getOrderWhatsAppPreview(order)
     if (!preview) { alert('This order has no invoice details available.'); return }
-    const subtotal = order.total - (order.delivery_charge || 0) + (order.discount_amount || 0)
+    const subtotal = preview.subtotal
 
     printThermalReceipt({
       invoiceNo: order.invoice_no || order.id,
@@ -1112,6 +1114,7 @@ export default function Dashboard() {
       subtotal,
       shipping: order.delivery_charge || 0,
       couponDiscount: order.discount_amount || 0,
+      manualDiscount: order.manual_discount_amount || 0,
       totalGst: order.total_gst || 0,
       total: order.total
     })
@@ -3576,7 +3579,7 @@ export default function Dashboard() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-[#9CA3AF] uppercase text-[10px] sm:text-[11px] font-black leading-tight">Discount</p>
-                          <p className="font-semibold text-emerald-700">{o.discount_amount > 0 ? `-${formatCurrency(o.discount_amount)}` : '—'}</p>
+                          <p className="font-semibold text-emerald-700">{(o.discount_amount + o.manual_discount_amount) > 0 ? `-${formatCurrency(o.discount_amount + o.manual_discount_amount)}` : '—'}</p>
                         </div>
                         <div className="min-w-0">
                           <p className="text-[#9CA3AF] uppercase text-[10px] sm:text-[11px] font-black leading-tight">Delivery</p>
@@ -3665,7 +3668,7 @@ export default function Dashboard() {
                             {o.coupon_code ? <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">{o.coupon_code}</span> : <span className="text-[#9CA3AF]">—</span>}
                           </td>
                           <td className="px-2 py-3 text-[11px]">
-                            {o.discount_amount > 0 ? <span className="font-bold text-emerald-700">-{formatCurrency(o.discount_amount)}</span> : <span className="text-[#9CA3AF]">—</span>}
+                            {(o.discount_amount + o.manual_discount_amount) > 0 ? <span className="font-bold text-emerald-700">-{formatCurrency(o.discount_amount + o.manual_discount_amount)}</span> : <span className="text-[#9CA3AF]">—</span>}
                           </td>
                           <td className="px-2 py-3 text-[11px]">
                             {o.delivery_charge > 0 ? <span className="font-bold text-[#111111]">{formatCurrency(o.delivery_charge)}</span> : <span className="text-[#9CA3AF]">—</span>}
@@ -3747,6 +3750,27 @@ export default function Dashboard() {
                                   <p className="font-semibold text-[#374151] break-words">{o.address || '—'}</p>
                                 </div>
                               </div>
+                              {(() => {
+                                const itemsSubtotal = getOrderWhatsAppPreview(o)?.subtotal ?? 0
+                                const rows: Array<[string, string, string?]> = []
+                                rows.push(['Subtotal', formatCurrency(itemsSubtotal > 0 ? itemsSubtotal : o.total - o.delivery_charge - o.total_gst + o.discount_amount + o.manual_discount_amount)])
+                                if (o.discount_amount > 0) rows.push([o.coupon_code ? `Coupon (${o.coupon_code})` : 'Coupon / Discount', `-${formatCurrency(o.discount_amount)}`, 'text-emerald-700'])
+                                if (o.manual_discount_amount > 0) rows.push(['Discount', `-${formatCurrency(o.manual_discount_amount)}`, 'text-emerald-700'])
+                                if (o.total_gst > 0) {
+                                  const cgst = Math.round((o.total_gst / 2) * 100) / 100
+                                  rows.push(['CGST', formatCurrency(cgst)], ['SGST', formatCurrency(Math.round((o.total_gst - cgst) * 100) / 100)])
+                                }
+                                rows.push(['Delivery Charges', o.delivery_charge > 0 ? formatCurrency(o.delivery_charge) : 'Free (₹0)'])
+                                return (
+                                  <div className="mt-4 max-w-sm rounded-xl border border-[#D4AF37]/40 bg-white p-3 text-[12px]">
+                                    <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-[#9CA3AF]">Price Breakdown</p>
+                                    {rows.map(([label, value, color]) => (
+                                      <div key={label} className="flex justify-between py-0.5"><span className="text-[#374151]">{label}</span><span className={`font-bold ${color || 'text-[#111111]'}`}>{value}</span></div>
+                                    ))}
+                                    <div className="mt-1.5 flex justify-between border-t border-[#F3F4F6] pt-1.5 text-[13px]"><span className="font-black text-[#B38018]">Total</span><span className="font-black text-[#111111]">{formatCurrency(getOrderTotal(o))}</span></div>
+                                  </div>
+                                )
+                              })()}
                             </td>
                           </tr>
                         )}
