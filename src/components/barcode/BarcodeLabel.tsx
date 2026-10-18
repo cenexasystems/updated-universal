@@ -109,8 +109,11 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
           </span>
         )}
         <span
-          className="font-black text-black"
-          style={{ fontSize: isSmall ? '8.5px' : isLarge ? '12px' : '10px' }}
+          className="font-black text-black whitespace-nowrap"
+          style={{
+            fontSize: isSmall ? '17px' : isLarge ? '25px' : '21px',
+            WebkitTextStroke: '0.5px #000',
+          }}
         >
           {formatCurrency(price)}
         </span>

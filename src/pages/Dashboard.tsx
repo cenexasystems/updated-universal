@@ -4,7 +4,7 @@ import {
   Box, AlertCircle, ArrowUp, ArrowDown, Power, Download, TrendingUp, TrendingDown,
   Package, Search, RefreshCw, ShieldCheck, ShieldOff, Trophy,
   MessageCircle, ChevronDown, Eye, FileText, Printer, MoreVertical, X, Layers, Receipt,
-  SlidersHorizontal, Tag, Ticket, Percent, CheckCircle2, Info, Sparkles, Banknote, QrCode, CreditCard, Gift,
+  SlidersHorizontal, Tag, Ticket, Percent, CheckCircle2, Info, Sparkles, Banknote, QrCode, CreditCard, Gift, Users,
 } from 'lucide-react'
 import { paymentBreakdown, formatPaymentLabel } from '../lib/payments'
 
@@ -58,6 +58,7 @@ import { InventoryTable } from '../components/inventory/InventoryTable'
 import { CategoryManagerView } from '../components/inventory/CategoryManagerView'
 import { ExpensesView } from '../components/expenses/ExpensesView'
 import { BirthdaysView } from '../components/birthdays/BirthdaysView'
+import { CustomersView } from '../components/customers/CustomersView'
 import { expenseService, type ExpenseRecord } from '../services/expenseService'
 import { useNavigationStore } from '../store/navigationStore'
 import { useHardwareBarcodeScanner } from '../hooks/useHardwareBarcodeScanner'
@@ -93,7 +94,7 @@ type DashboardCoupon = {
   usage_count: number
   min_order_value: number
 }
-type TabKey = 'overview' | 'whatsapp' | 'pos_analytics' | 'billing' | 'advance_orders' | 'inventory' | 'expenses' | 'birthdays' | 'products' | 'categories' | 'coupons' | 'users' | 'history'
+type TabKey = 'overview' | 'whatsapp' | 'pos_analytics' | 'billing' | 'advance_orders' | 'inventory' | 'expenses' | 'birthdays' | 'customers' | 'products' | 'categories' | 'coupons' | 'users' | 'history'
 type PosAnalyticsTab = 'revenue' | 'today' | 'products' | 'categories' | 'coupons'
 type ProfileUser = { id: string; email: string; name: string; mobile: string; role: string; created_at: string }
 
@@ -333,7 +334,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (role === 'staff') {
-      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'birthdays', 'expenses', 'history']
+      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'birthdays', 'customers', 'expenses', 'history']
       if (!staffAllowedTabs.includes(tab)) {
         setTab('billing')
         navigate('/dashboard', { replace: true })
@@ -343,7 +344,7 @@ export default function Dashboard() {
 
   const handleTabClick = (tabKey: TabKey) => {
     if (role === 'staff') {
-      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'birthdays', 'expenses', 'history']
+      const staffAllowedTabs: TabKey[] = ['billing', 'inventory', 'advance_orders', 'birthdays', 'customers', 'expenses', 'history']
       if (!staffAllowedTabs.includes(tabKey)) return
     }
     setTab(tabKey)
@@ -352,6 +353,8 @@ export default function Dashboard() {
       navigate('/dashboard?tab=pos_analytics', { replace: true })
     } else if (tabKey === 'expenses') {
       navigate('/dashboard?tab=expenses', { replace: true })
+    } else if (tabKey === 'customers') {
+      navigate('/dashboard?tab=customers', { replace: true })
     } else if (tabKey === 'birthdays') {
       navigate('/dashboard?tab=birthdays', { replace: true })
     } else if (tabKey === 'advance_orders') {
@@ -1790,6 +1793,7 @@ export default function Dashboard() {
         { id: 'inventory',      icon: <Layers size={18} />,       label: 'Inventory' },
         { id: 'advance_orders', icon: <FileText size={18} />,     label: 'Advance Orders' },
         { id: 'birthdays',      icon: <Gift size={18} />,         label: 'Birthdays' },
+        { id: 'customers',      icon: <Users size={18} />,        label: 'Customers' },
         { id: 'expenses',       icon: <Receipt size={18} />,      label: 'Expenses' },
         { id: 'history',        icon: <List size={18} />,         label: 'Order History' },
       ]
@@ -1798,6 +1802,7 @@ export default function Dashboard() {
         { id: 'inventory',      icon: <Layers size={18} />,       label: 'Inventory & Barcodes' },
         { id: 'advance_orders', icon: <FileText size={18} />,     label: 'Advance Orders' },
         { id: 'birthdays',      icon: <Gift size={18} />,         label: 'Birthdays' },
+        { id: 'customers',      icon: <Users size={18} />,        label: 'Customers' },
         { id: 'expenses',       icon: <Receipt size={18} />,      label: 'Expenses' },
         { id: 'history',        icon: <List size={18} />,         label: 'Order History' },
         { id: 'pos_analytics',  icon: <BarChart2 size={18} />,    label: 'Analytics Dashboard' },
@@ -4710,6 +4715,11 @@ export default function Dashboard() {
         {/* ── BIRTHDAYS TAB ── */}
         {tab === 'birthdays' && (
           <BirthdaysView />
+        )}
+
+        {/* ── CUSTOMERS TAB ── */}
+        {tab === 'customers' && (
+          <CustomersView />
         )}
         {/* Footer: sits at the end of the scrolling content, visible only when scrolled to the bottom */}
         <div className="mt-10 border-t border-gray-200 pt-4 pb-1 text-center text-[12px] font-semibold text-[#9CA3AF] tracking-wide print:hidden">

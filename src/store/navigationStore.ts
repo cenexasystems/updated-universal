@@ -7,6 +7,7 @@ export type DashboardTab =
   | 'advance_orders'
   | 'expenses'
   | 'birthdays'
+  | 'customers'
   | 'history'
   | 'pos_analytics'
   | 'coupons'
