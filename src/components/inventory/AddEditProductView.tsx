@@ -116,9 +116,11 @@ export const AddEditProductView: React.FC<{
     setCategoryId(matchedCatId)
 
     setPrice(String(p.price || ''))
-    setPurchasePrice(String(p.purchasePrice || ''))
+    // Use ?? so a stored cost of 0 shows as '0', not blank
+    setPurchasePrice(p.purchasePrice != null ? String(p.purchasePrice) : '')
     setStockQuantity(String(p.stockQuantity ?? p.stock ?? 0))
-    setLowStockAlert(p.lowStockAlert ? String(p.lowStockAlert) : '5')
+    // Use the product's own low-stock threshold; fall back to 5 only when absent/invalid
+    setLowStockAlert(p.lowStockAlert != null && p.lowStockAlert > 0 ? String(p.lowStockAlert) : '5')
     setBarcode(p.barcode || '')
     setDescription(p.description || '')
     setHasVariants(Boolean(p.hasVariants))

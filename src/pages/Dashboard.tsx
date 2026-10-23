@@ -1556,7 +1556,7 @@ export default function Dashboard() {
       name: p.name, nameTa: p.nameTa || p.tamilName || '', category: p.category,
       categoryId: p.categoryId ?? null, remedy: p.remedy || [],
       price: p.price, offerPrice: p.offerPrice || '',
-      purchasePrice: p.purchasePrice || '', mrp: p.mrp || '',
+      purchasePrice: p.purchasePrice != null ? p.purchasePrice : '', mrp: p.mrp || '',
       sku: p.sku || '', barcode: p.barcode || '',
       unitType: p.unitType,
       unitLabel: p.unitLabel, baseQuantity: p.baseQuantity,

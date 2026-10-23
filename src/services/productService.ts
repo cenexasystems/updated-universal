@@ -11,6 +11,8 @@ const PRODUCT_COLUMNS = [
   'predefined_options', 'is_active', 'sort_order', 'unit', 'rating',
   'description', 'description_ta', 'benefits', 'benefits_ta',
   'image_url', 'image', 'has_variants', 'barcode', 'sku',
+  // Required for inventory cost-price display and per-product low-stock alerting
+  'purchase_price', 'low_stock_alert',
 ].join(', ')
 
 export function fetchAllCategories() {
