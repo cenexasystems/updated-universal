@@ -106,7 +106,8 @@ export function printAdvanceReceipt(order: AdvanceOrder, payments: AdvancePaymen
     font-size: 12px;
     width: 72mm;
     padding: 4mm;
-    color: #111;
+    color: #000;
+    font-weight: 700;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -114,25 +115,25 @@ export function printAdvanceReceipt(order: AdvanceOrder, payments: AdvancePaymen
   .r { display: flex; justify-content: space-between; gap: 4px; margin: 5px 0; word-break: break-word; }
   .r span:first-child { flex-shrink: 0; max-width: 55%; }
   .r span:last-child { text-align: right; flex: 1; }
-  .line { border-top: 1px dashed #555; margin: 8px 0; }
+  .line { border-top: 1px dashed #000; margin: 8px 0; }
   .big { font-size: 15px; font-weight: bold; }
-  .bold { font-weight: bold; }
+  .bold { font-weight: 900; }
   .warn { font-size: 9px; font-weight: bold; margin-top: 10px; text-align: center; }
-  .label { font-size: 10px; color: #555; }
+  .label { font-size: 10px; color: #000; }
   .balance-row { font-size: 14px; font-weight: bold; }
 </style>
 </head><body>
 <div class="c" style="margin-bottom: 6px;">
   <img src="${LOGO_BASE64}" style="width: 50px; height: 50px; object-fit: contain; margin: 0 auto; display: block;" alt="Universal Look Logo" />
 </div>
-<div class="c" style="font-size:10px;color:#555;">${esc(BRAND_ADDRESS)}</div>
-<div class="c" style="font-size:10px;color:#555;">${esc(BRAND_PHONE_DISPLAY)}</div>
+<div class="c" style="font-size:10px;color:#000;">${esc(BRAND_ADDRESS)}</div>
+<div class="c" style="font-size:10px;color:#000;">${esc(BRAND_PHONE_DISPLAY)}</div>
 <div class="line"></div>
 <div class="c big">ADVANCE RECEIPT</div>
 <div class="c" style="font-size:10px;">Not a final tax invoice</div>
 <div class="line"></div>
 <div><span class="bold">${esc(order.deposit_id)}</span></div>
-<div style="font-size:10px;color:#555;">${new Date(order.created_at).toLocaleString('en-IN')}</div>
+<div style="font-size:10px;color:#000;">${new Date(order.created_at).toLocaleString('en-IN')}</div>
 <div class="line"></div>
 <div class="r"><span class="label">Customer</span><span class="bold">${esc(order.customer_name)}</span></div>
 <div class="r"><span class="label">Phone</span><span>${esc(formatPhoneDisplay(order.phone))}</span></div>
@@ -144,7 +145,7 @@ ${order.category ? `<div class="r"><span class="label">Category</span><span>${es
 <div class="line"></div>
 ${advanceBreakdownRows(order).map(row => `<div class="r${row.kind === 'total' ? ' bold' : ''}"><span>${esc(row.label)}</span><span>${row.kind === 'free' ? 'FREE' : `${row.kind === 'minus' ? '-' : ''}${esc(formatCurrency(row.value))}`}</span></div>`).join('')}
 <div class="line"></div>
-${paymentLines(order, payments).map(line => `<div class="r${line.accent ? ' balance-row' : ''}"${line.sub ? ' style="font-size:10px;color:#555;padding-left:8px;"' : ''}><span>${esc(line.label)}</span><span class="${line.sub || line.accent ? '' : 'bold'}">${esc(formatCurrency(line.value))}</span></div>`).join('')}
+${paymentLines(order, payments).map(line => `<div class="r${line.accent ? ' balance-row' : ''}"${line.sub ? ' style="font-size:10px;color:#000;padding-left:8px;"' : ''}><span>${esc(line.label)}</span><span class="${line.sub || line.accent ? '' : 'bold'}">${esc(formatCurrency(line.value))}</span></div>`).join('')}
 <div class="line"></div>
 <div class="warn">ADVANCE PAYMENT ONLY &mdash; NOT A FINAL INVOICE</div>
 </body></html>`

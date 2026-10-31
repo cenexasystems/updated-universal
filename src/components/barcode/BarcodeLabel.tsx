@@ -41,6 +41,7 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
         height: barcodeHeightPx,
         fontSize: barcodeFontSize,
         font: 'Arial, sans-serif',
+        fontOptions: 'bold',
         margin: 0,
         textMargin: 1.5,
         displayValue: true,
@@ -65,22 +66,13 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
-      {/* Brand & Product Header */}
+      {/* Brand Header */}
       <div className="w-full flex flex-col items-center leading-none shrink-0">
         <div
-          className="font-black tracking-wider text-gray-900 uppercase truncate max-w-full"
-          style={{ fontSize: isSmall ? '7.5px' : isLarge ? '11px' : '9px' }}
+          className="font-black tracking-wider text-black uppercase truncate max-w-full"
+          style={{ fontSize: isSmall ? '7.5px' : isLarge ? '11px' : '9px', WebkitTextStroke: '0.3px #000' }}
         >
           {storeName}
-        </div>
-        <div
-          className="font-bold text-gray-900 truncate max-w-full leading-tight"
-          style={{
-            fontSize: isSmall ? '6.5px' : isLarge ? '9.5px' : '8px',
-            marginTop: '0.3mm',
-          }}
-        >
-          {fullTitle}
         </div>
       </div>
 
@@ -92,22 +84,26 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
         <svg ref={svgRef} className="max-w-[98%] max-h-full h-auto" />
       </div>
 
-      {/* Pricing Footer */}
+      {/* Footer: product name + size on the left, price on the right */}
       <div
         className="w-full flex items-center justify-between px-0.5 border-t border-black leading-none shrink-0"
         style={{
           paddingTop: isSmall ? '0.4mm' : '0.6mm',
         }}
       >
-        {mrp && mrp > price ? (
-          <span className="text-gray-500 line-through" style={{ fontSize: isSmall ? '6px' : isLarge ? '8.5px' : '7.5px' }}>
-            MRP {formatCurrency(mrp)}
+        <div className="flex flex-col items-start min-w-0 flex-1 mr-1 text-left">
+          <span
+            className="font-extrabold text-black truncate max-w-full leading-tight"
+            style={{ fontSize: isSmall ? '7px' : isLarge ? '10px' : '8.5px', WebkitTextStroke: '0.25px #000' }}
+          >
+            {fullTitle}
           </span>
-        ) : (
-          <span className="text-gray-600 font-bold" style={{ fontSize: isSmall ? '6px' : isLarge ? '8.5px' : '7px' }}>
-            UNIVERSAL LOOK
-          </span>
-        )}
+          {mrp && mrp > price && (
+            <span className="text-black line-through font-bold" style={{ fontSize: isSmall ? '6px' : isLarge ? '8.5px' : '7.5px' }}>
+              MRP {formatCurrency(mrp)}
+            </span>
+          )}
+        </div>
         <span
           className="font-black text-black whitespace-nowrap"
           style={{

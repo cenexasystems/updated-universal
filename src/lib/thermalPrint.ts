@@ -69,6 +69,10 @@ export function printThermalReceipt(data: ThermalReceiptData) {
             font-family: 'Courier New', Courier, monospace, sans-serif;
             font-size: 12px;
             color: #000;
+            font-weight: 700;
+            -webkit-text-stroke: 0.35px #000;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
             margin: 0;
             padding: 4mm;
             width: 80mm;
@@ -77,7 +81,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
           .text-center { text-align: center; }
           .text-right { text-align: right; }
           .text-left { text-align: left; }
-          .font-bold { font-weight: bold; }
+          .font-bold { font-weight: 900; }
           .mb-1 { margin-bottom: 4px; }
           .mb-2 { margin-bottom: 8px; }
           .mt-1 { margin-top: 4px; }
@@ -85,16 +89,17 @@ export function printThermalReceipt(data: ThermalReceiptData) {
           .border-bottom { border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 4px; }
           .border-top { border-top: 1px dashed #000; padding-top: 4px; margin-top: 4px; }
           table { width: 100%; border-collapse: collapse; }
-          th, td { padding: 2px 0; vertical-align: top; }
+          th, td { padding: 2px 0; vertical-align: top; color: #000; font-weight: 700; }
+          th { font-weight: 900; }
           .item-name { font-size: 11px; padding-right: 4px; }
         </style>
       </head>
       <body>
         <div class="text-center mb-2">
           <img src="${LOGO_BASE64}" style="width: 48px; height: 48px; object-fit: contain; margin: 0 auto 6px auto; display: block;" alt="Universal Look Logo" />
-          <div style="font-size: 9.5px; margin-top: 2px; line-height: 1.3;">${data.storeAddress || BRAND_ADDRESS}</div>
-          <div class="mt-1" style="font-size: 10px; font-weight: bold;">Ph: ${BRAND_PRIMARY_PHONE_DISPLAY}</div>
-          <div style="font-size: 9px; color: #333;">${data.storeEmail || BRAND_EMAIL} | Insta: @${BRAND_INSTAGRAM}</div>
+          <div style="font-size: 10.5px; margin-top: 2px; line-height: 1.3; color: #000; font-weight: 700;">${data.storeAddress || BRAND_ADDRESS}</div>
+          <div class="mt-1" style="font-size: 11px; font-weight: 900; color: #000;">Ph: ${BRAND_PRIMARY_PHONE_DISPLAY}</div>
+          <div style="font-size: 10px; color: #000; font-weight: 700;">${data.storeEmail || BRAND_EMAIL} | Insta: @${BRAND_INSTAGRAM}</div>
         </div>
 
         <div class="border-bottom border-top" style="font-size: 11px;">
@@ -106,7 +111,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
 
         <table class="border-bottom" style="width: 100%; table-layout: fixed; border-collapse: collapse;">
           <thead>
-            <tr style="font-size: 10px; border-bottom: 1px dashed #000;">
+            <tr style="font-size: 11px; color: #000; border-bottom: 1px dashed #000;">
               <th style="width: 50%; text-align: left; padding: 4px 0;">Item Name</th>
               <th style="width: 18%; text-align: center; padding: 4px 0;">Qty</th>
               <th style="width: 32%; text-align: right; padding: 4px 0;">Amount</th>
@@ -120,13 +125,13 @@ export function printThermalReceipt(data: ThermalReceiptData) {
               return `
                 <tr>
                   <td style="text-align: left; padding: 3px 2px 3px 0; vertical-align: top; word-break: break-word;">
-                    <div style="font-size: 11px; font-weight: bold; line-height: 1.25;">${item.name}</div>
-                    <div style="font-size: 9px; color: #444; margin-top: 1px;">@ ${rateDisplay}</div>
+                    <div style="font-size: 12px; font-weight: 900; color: #000; line-height: 1.25;">${item.name}</div>
+                    <div style="font-size: 10px; color: #000; font-weight: 700; margin-top: 1px;">@ ${rateDisplay}</div>
                   </td>
-                  <td style="text-align: center; vertical-align: top; padding: 3px 0; font-size: 11px;">
+                  <td style="text-align: center; vertical-align: top; padding: 3px 0; font-size: 12px; font-weight: 900; color: #000;">
                     ${item.qty}
                   </td>
-                  <td style="text-align: right; vertical-align: top; padding: 3px 0; font-size: 11px; font-weight: bold;">
+                  <td style="text-align: right; vertical-align: top; padding: 3px 0; font-size: 12px; font-weight: 900; color: #000;">
                     ${formatCurrency(lineTotal)}
                   </td>
                 </tr>
@@ -181,7 +186,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
               <td class="text-right">${formatCurrency(data.total)}</td>
             </tr>
             ${(data.paymentRows || []).map(row => `
-              <tr style="${row.sub ? 'font-size: 10px; color: #444;' : row.accent ? 'font-weight: bold;' : ''}">
+              <tr style="${row.sub ? 'font-size: 11px; color: #000;' : row.accent ? 'font-weight: 900;' : ''}">
                 <td class="text-left">${row.sub ? '&nbsp;&nbsp;' : ''}${row.label}</td>
                 <td class="text-right">${formatCurrency(row.value)}</td>
               </tr>

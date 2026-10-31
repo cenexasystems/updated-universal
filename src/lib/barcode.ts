@@ -165,6 +165,7 @@ export interface BarcodeRenderOptions {
   displayValue?: boolean
   fontSize?: number
   font?: string
+  fontOptions?: string
   textMargin?: number
   margin?: number
   lineColor?: string
@@ -189,6 +190,7 @@ export function renderBarcodeSvg(
       displayValue: options?.displayValue ?? true,
       fontSize: options?.fontSize ?? 11,
       font: options?.font ?? 'monospace',
+      fontOptions: options?.fontOptions ?? '',
       textMargin: options?.textMargin ?? 1,
       margin: options?.margin ?? 4,
       lineColor: options?.lineColor ?? '#000000',

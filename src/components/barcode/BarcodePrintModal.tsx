@@ -121,13 +121,14 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
         height: barcodeHeightPx,
         fontSize: barcodeFontSize,
         font: 'Arial, sans-serif',
+        fontOptions: 'bold',
         margin: 0,
         textMargin: 1.5,
         displayValue: true,
       })
 
       const headerFontSize = isSmall ? '7pt' : isLarge ? '10.5pt' : '8.5pt'
-      const titleFontSize = isSmall ? '6pt' : isLarge ? '9pt' : '7.5pt'
+      const titleFontSize = isSmall ? '6.5pt' : isLarge ? '9.5pt' : '8pt'
       const tagFontSize = isSmall ? '5.5pt' : isLarge ? '8.5pt' : '7pt'
       const priceFontSize = isSmall ? '14pt' : isLarge ? '20pt' : '17pt'
       const stickerPadding = isSmall ? '0.6mm 1.2mm' : '1.0mm 1.6mm'
@@ -139,13 +140,15 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       <div class="sticker">
         <div class="header">
           <div class="brand">${BRAND_EN}</div>
-          <div class="prod-title">${fullTitle}</div>
         </div>
         <div class="barcode-box">
           ${svgMarkup}
         </div>
         <div class="footer">
-          <span>${mrp && mrp > price ? `<span class="mrp">MRP ₹${mrp}</span>` : '<span class="retail-tag">UNIVERSAL LOOK</span>'}</span>
+          <span class="footer-left">
+            <span class="prod-title">${fullTitle}</span>
+            ${mrp && mrp > price ? `<span class="mrp">MRP ₹${mrp}</span>` : ''}
+          </span>
           <span class="price">₹${price}</span>
         </div>
       </div>
@@ -261,7 +264,7 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
               box-sizing: border-box;
               flex-shrink: 0;
               background: #fff;
-              ${!isThermal ? 'border: 0.2mm dashed #bbb;' : ''}
+              ${!isThermal ? 'border: 0.2mm dashed #000;' : ''}
             }
             .header {
               width: 100%;
@@ -278,17 +281,28 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
               letter-spacing: 0.3px;
               text-transform: uppercase;
               color: #000;
+              -webkit-text-stroke: 0.25pt #000;
               line-height: 1.1;
+            }
+            .footer-left {
+              display: flex;
+              flex-direction: column;
+              align-items: flex-start;
+              justify-content: center;
+              min-width: 0;
+              flex: 1;
+              margin-right: 1mm;
+              text-align: left;
             }
             .prod-title {
               font-size: ${titleFontSize};
-              font-weight: 700;
+              font-weight: 800;
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
-              max-width: 98%;
-              margin-top: 0.3mm;
-              color: #111;
+              max-width: 100%;
+              color: #000;
+              -webkit-text-stroke: 0.2pt #000;
               line-height: 1.1;
             }
             .barcode-box {
@@ -319,16 +333,13 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
               line-height: 1;
               flex-shrink: 0;
             }
-            .retail-tag {
-              font-size: ${tagFontSize};
-              font-weight: 800;
-              color: #444;
-            }
             .mrp {
               text-decoration: line-through;
-              color: #555;
+              color: #000;
               font-size: ${tagFontSize};
-              font-weight: 600;
+              font-weight: 800;
+              -webkit-text-stroke: 0.2pt #000;
+              line-height: 1.1;
             }
             .price {
               font-size: ${priceFontSize};
