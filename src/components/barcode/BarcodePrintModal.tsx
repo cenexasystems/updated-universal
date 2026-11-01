@@ -109,8 +109,8 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       const isLarge = selectedPreset.heightMm >= 40
 
       // Proportional barcode sizing preventing detail overlaps
-      // Barcode bars take ~32% of height, leaving balanced space for text, header, and footer
-      const barcodeHeightPx = Math.max(16, Math.round(selectedPreset.heightMm * 0.32 * 3.7795))
+      // Barcode bars take ~27% of height, leaving balanced space for text and footer
+      const barcodeHeightPx = Math.max(16, Math.round(selectedPreset.heightMm * 0.27 * 3.7795))
       const printableWidthPx = Math.max(30, (selectedPreset.widthMm - 4) * 3.7795)
       const barcodeBarWidth = Math.max(0.80, Math.min(1.70, Math.round((printableWidthPx / 120) * 100) / 100))
       const barcodeFontSize = Math.max(6, Math.min(9.5, Math.round(selectedPreset.heightMm * 0.20 * 10) / 10))
@@ -127,7 +127,6 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
         displayValue: true,
       })
 
-      const headerFontSize = isSmall ? '7pt' : isLarge ? '10.5pt' : '8.5pt'
       const titleFontSize = isSmall ? '6.5pt' : isLarge ? '9.5pt' : '8pt'
       const tagFontSize = isSmall ? '5.5pt' : isLarge ? '8.5pt' : '7pt'
       const priceFontSize = isSmall ? '14pt' : isLarge ? '20pt' : '17pt'
@@ -136,13 +135,15 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
     // Build standalone HTML for the printed stickers with strict thermal proportions
     const parsedQty = parseInt(quantity.trim(), 10)
     const validQuantity = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 1
+    // Shop name stretched to exactly the barcode's width (glyphs scale with the SVG)
+    const brandSvg = `<svg class="brand-svg" viewBox="0 0 200 20" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><text x="0" y="16" textLength="200" lengthAdjust="spacingAndGlyphs" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="19" fill="#000" stroke="#000" stroke-width="0.7">${BRAND_EN.toUpperCase()}</text></svg>`
     const singleStickerHtml = `
       <div class="sticker">
-        <div class="header">
-          <div class="brand">${BRAND_EN}</div>
-        </div>
         <div class="barcode-box">
-          ${svgMarkup}
+          <div class="bb">
+            ${brandSvg}
+            <div class="bc">${svgMarkup}</div>
+          </div>
         </div>
         <div class="footer">
           <span class="footer-left">
@@ -266,23 +267,50 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
               background: #fff;
               ${!isThermal ? 'border: 0.2mm dashed #000;' : ''}
             }
-            .header {
-              width: 100%;
+            .bb {
               display: flex;
               flex-direction: column;
-              align-items: center;
-              justify-content: flex-start;
-              line-height: 1.1;
+              align-items: stretch;
+              max-width: 98%;
+              max-height: 100%;
+              min-height: 0;
+            }
+            .brand-svg {
+              display: block;
+              width: 0;
+              min-width: 100%;
+              height: auto;
+              margin-bottom: 0.6mm;
               flex-shrink: 0;
             }
-            .brand {
-              font-size: ${headerFontSize};
-              font-weight: 900;
-              letter-spacing: 0.3px;
-              text-transform: uppercase;
-              color: #000;
-              -webkit-text-stroke: 0.25pt #000;
-              line-height: 1.1;
+            .bc { display: flex; justify-content: center; min-height: 0; }
+            .barcode-box {
+              width: 100%;
+              flex: 1;
+              min-height: 0;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              margin: 0.4mm 0;
+              overflow: hidden;
+            }
+            .bc svg {
+              display: block;
+              margin: 0 auto;
+              max-width: 100%;
+              max-height: 100%;
+              width: auto;
+              height: auto;
+            }
+            .footer {
+              width: 100%;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-top: 0.6pt solid #000;
+              padding-top: 0.5mm;
+              line-height: 1;
+              flex-shrink: 0;
             }
             .footer-left {
               display: flex;
@@ -304,34 +332,6 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
               color: #000;
               -webkit-text-stroke: 0.2pt #000;
               line-height: 1.1;
-            }
-            .barcode-box {
-              width: 100%;
-              flex: 1;
-              min-height: 0;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              margin: 0.4mm 0;
-              overflow: hidden;
-            }
-            .barcode-box svg {
-              display: block;
-              margin: 0 auto;
-              max-width: 98%;
-              max-height: 100%;
-              width: auto;
-              height: auto;
-            }
-            .footer {
-              width: 100%;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-top: 0.6pt solid #000;
-              padding-top: 0.5mm;
-              line-height: 1;
-              flex-shrink: 0;
             }
             .mrp {
               text-decoration: line-through;

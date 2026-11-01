@@ -1,6 +1,6 @@
 import { BRAND_ADDRESS, BRAND_EN, BRAND_GSTIN, BRAND_PRIMARY_PHONE_DISPLAY } from './brand'
 import { LOGO_BASE64 } from './logoBase64'
-import { formatCurrency, formatInvoiceNo } from './retail'
+import { formatCurrency, formatInvoiceNo, getSizeFromUnit } from './retail'
 import { printHtmlDocument } from './printHtml'
 
 export interface ThermalReceiptData {
@@ -160,7 +160,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
           <tbody>
             ${data.items.map(item => {
               const lineTotal = item.line_total ?? (item.qty * item.price)
-              const { name, size } = splitNameAndSize(item.name, item.size)
+              const { name, size } = splitNameAndSize(item.name, item.size || getSizeFromUnit(item.unit))
               return `
                 <tr>
                   <td style="width: 27%; text-align: left; word-break: break-word; padding-right: 2px;">${escapeHtml(name)}</td>

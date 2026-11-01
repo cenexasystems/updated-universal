@@ -29,7 +29,7 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
   const isLarge = heightMm >= 40
 
   // Dynamic calculation for barcode dimensions and typography (balanced proportions to prevent overlapping)
-  const barcodeHeightPx = Math.max(16, Math.round(heightMm * 0.32 * 3.7795))
+  const barcodeHeightPx = Math.max(16, Math.round(heightMm * 0.27 * 3.7795))
   const printableWidthPx = Math.max(30, (widthMm - 4) * 3.7795)
   const barcodeBarWidth = Math.max(0.80, Math.min(1.70, Math.round((printableWidthPx / 120) * 100) / 100))
   const barcodeFontSize = Math.max(6, Math.min(9.5, Math.round(heightMm * 0.20 * 10) / 10))
@@ -66,22 +66,38 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
         fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
       }}
     >
-      {/* Brand Header */}
-      <div className="w-full flex flex-col items-center leading-none shrink-0">
-        <div
-          className="font-black tracking-wider text-black uppercase truncate max-w-full"
-          style={{ fontSize: isSmall ? '7.5px' : isLarge ? '11px' : '9px', WebkitTextStroke: '0.3px #000' }}
-        >
-          {storeName}
-        </div>
-      </div>
-
-      {/* Barcode Graphic Box */}
+      {/* Shop name stretched to exactly the barcode's width, stacked above the bars */}
       <div
         className="w-full flex-1 flex justify-center items-center overflow-hidden"
         style={{ margin: '0.4mm 0', minHeight: 0 }}
       >
-        <svg ref={svgRef} className="max-w-[98%] max-h-full h-auto" />
+        <div className="flex flex-col items-stretch min-h-0" style={{ maxWidth: '98%', maxHeight: '100%' }}>
+          <svg
+            viewBox="0 0 200 20"
+            preserveAspectRatio="none"
+            className="block shrink-0"
+            style={{ width: 0, minWidth: '100%', height: 'auto', marginBottom: '0.6mm' }}
+            aria-label={storeName}
+          >
+            <text
+              x="0"
+              y="16"
+              textLength="200"
+              lengthAdjust="spacingAndGlyphs"
+              fontFamily="Arial, Helvetica, sans-serif"
+              fontWeight={900}
+              fontSize="19"
+              fill="#000"
+              stroke="#000"
+              strokeWidth="0.7"
+            >
+              {storeName.toUpperCase()}
+            </text>
+          </svg>
+          <div className="flex justify-center min-h-0">
+            <svg ref={svgRef} className="block max-w-full max-h-full h-auto" />
+          </div>
+        </div>
       </div>
 
       {/* Footer: product name + size on the left, price on the right */}

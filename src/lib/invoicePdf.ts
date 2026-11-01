@@ -2,7 +2,7 @@ import { formatPhoneDisplay } from './phone'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import { BRAND_ADDRESS, BRAND_EN, BRAND_PHONE_DISPLAY } from './brand'
-import { formatCurrency, formatQuantityDisplay, normalizeStructuredOrderItem, formatInvoiceNo } from './retail'
+import { formatCurrency, formatQuantityDisplay, getSizeFromUnit, normalizeStructuredOrderItem, formatInvoiceNo } from './retail'
 import { LOGO_BASE64 } from './logoBase64'
 
 export type InvoicePdfData = {
@@ -119,7 +119,9 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   data.items.forEach((raw, index) => {
     const item = normalizeStructuredOrderItem(raw)
     if (y > 260) { doc.addPage(); y = 20 }
-    const name = item.name || 'Item'
+    const sizeLabel = getSizeFromUnit(item.unit)
+    const baseName = item.name || 'Item'
+    const name = sizeLabel && !baseName.toLowerCase().includes(sizeLabel.toLowerCase()) ? `${baseName} (Size: ${sizeLabel})` : baseName
     const nameLines = doc.splitTextToSize(name, 105) as string[]
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)

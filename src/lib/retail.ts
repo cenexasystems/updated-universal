@@ -127,6 +127,19 @@ const normalizeUnitToken = (value: string) => {
   return token
 }
 
+/**
+ * Size-variant products store their size ("28", "XL") in the unit field. Anything that is not a
+ * real measure (piece, bundle, weight, volume) is a size label, not something to print after a quantity.
+ */
+export const getSizeFromUnit = (unitLabel: unknown): string => {
+  const raw = String(unitLabel ?? '').trim()
+  const token = normalizeUnitToken(raw)
+  if (!token || token === 'unit' || token === 'piece' || token === 'bundle') return ''
+  if (token in WEIGHT_FACTORS || token in VOLUME_FACTORS) return ''
+  if (/^\d+(\.\d+)?\s*(mg|g|gm|gms|kg|kgs|ml|l|ltr|litre|litres|liter|liters)$/i.test(raw)) return '' // pack sizes like "500 g" are measures, not sizes
+  return raw
+}
+
 export const inferUnitTypeFromLabel = (label: unknown): UnitType => {
   const unit = normalizeUnitToken(String(label || ''))
   if (unit in WEIGHT_FACTORS) return 'weight'
@@ -352,6 +365,9 @@ export const formatQuantityDisplay = (
 ) => {
   const q = formatNumber(quantity)
   const unit = normalizeUnitToken(unitLabel)
+
+  // A size label ("28", "XL") is not a unit of measure — show the plain quantity only
+  if (getSizeFromUnit(unitLabel)) return q
 
   if (unitType === 'unit' && unit === 'piece') {
     return `${q} ${Number(q) === 1 ? 'piece' : 'pieces'}`
