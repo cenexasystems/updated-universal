@@ -109,8 +109,8 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       const isLarge = selectedPreset.heightMm >= 40
 
       // Proportional barcode sizing preventing detail overlaps
-      // Barcode bars take ~27% of height, leaving balanced space for text and footer
-      const barcodeHeightPx = Math.max(16, Math.round(selectedPreset.heightMm * 0.27 * 3.7795))
+      // Barcode bars take ~32% of height for reliable scanning while leaving space for text and footer
+      const barcodeHeightPx = Math.max(16, Math.round(selectedPreset.heightMm * 0.32 * 3.7795))
       const printableWidthPx = Math.max(30, (selectedPreset.widthMm - 4) * 3.7795)
       const barcodeBarWidth = Math.max(0.80, Math.min(1.70, Math.round((printableWidthPx / 120) * 100) / 100))
       const barcodeFontSize = Math.max(6, Math.min(9.5, Math.round(selectedPreset.heightMm * 0.20 * 10) / 10))

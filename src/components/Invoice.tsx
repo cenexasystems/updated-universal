@@ -1,5 +1,5 @@
 import React from 'react'
-import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_INSTAGRAM, BRAND_PRIMARY_PHONE_DISPLAY, BRAND_ICON } from '../lib/brand'
+import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_EN, BRAND_GSTIN, BRAND_INSTAGRAM, BRAND_PRIMARY_PHONE_DISPLAY, BRAND_ICON } from '../lib/brand'
 import { formatCurrency, formatQuantityDisplay, getSizeFromUnit, normalizeStructuredOrderItem, formatInvoiceNo } from '../lib/retail'
 import { formatPhoneDisplay } from '../lib/phone'
 
@@ -86,6 +86,7 @@ export const Invoice: React.FC<InvoiceProps> = ({
         </div>
         <div style={{ fontSize: 11, color: '#6B7280', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span>📞 {BRAND_PRIMARY_PHONE_DISPLAY}</span>
+          <span>GSTIN: {BRAND_GSTIN}</span>
           <span>✉️ {BRAND_EMAIL}</span>
           <span>📷 @{BRAND_INSTAGRAM}</span>
         </div>

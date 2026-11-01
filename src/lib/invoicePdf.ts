@@ -1,7 +1,7 @@
 import { formatPhoneDisplay } from './phone'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
-import { BRAND_ADDRESS, BRAND_EN, BRAND_PHONE_DISPLAY } from './brand'
+import { BRAND_ADDRESS, BRAND_EN, BRAND_GSTIN, BRAND_PHONE_DISPLAY } from './brand'
 import { formatCurrency, formatQuantityDisplay, getSizeFromUnit, normalizeStructuredOrderItem, formatInvoiceNo } from './retail'
 import { LOGO_BASE64 } from './logoBase64'
 
@@ -70,11 +70,12 @@ export function createInvoicePdf(data: InvoicePdfData): Blob {
   doc.setFont('helvetica', 'normal')
   doc.text(BRAND_ADDRESS, left + 26, y + 11, { maxWidth: 85 })
   doc.text(`Phone: ${BRAND_PHONE_DISPLAY}`, left + 26, y + 20)
+  doc.text(`GSTIN: ${BRAND_GSTIN}`, left + 26, y + 25)
   doc.text(`Date: ${new Date(data.date).toLocaleDateString('en-IN')}`, right, y + 2, { align: 'right' })
   // Helvetica has no ₹ glyph: swap it for "Rs." and wrap long split-payment text so it stays inside the page
   const paymentText = `Payment: ${data.paymentMode || 'POS'}`.replace(/[₹₹]\s*/g, 'Rs. ')
   doc.text(doc.splitTextToSize(paymentText, 72) as string[], right, y + 7, { align: 'right' })
-  y += 32
+  y += 36
 
   const customerName = String(data.customerName || 'Walk-in Customer').trim()
   const customerPhone = formatPhoneDisplay(data.phone) || '—'

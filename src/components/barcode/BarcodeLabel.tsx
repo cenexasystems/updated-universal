@@ -29,7 +29,7 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
   const isLarge = heightMm >= 40
 
   // Dynamic calculation for barcode dimensions and typography (balanced proportions to prevent overlapping)
-  const barcodeHeightPx = Math.max(16, Math.round(heightMm * 0.27 * 3.7795))
+  const barcodeHeightPx = Math.max(16, Math.round(heightMm * 0.32 * 3.7795))
   const printableWidthPx = Math.max(30, (widthMm - 4) * 3.7795)
   const barcodeBarWidth = Math.max(0.80, Math.min(1.70, Math.round((printableWidthPx / 120) * 100) / 100))
   const barcodeFontSize = Math.max(6, Math.min(9.5, Math.round(heightMm * 0.20 * 10) / 10))
