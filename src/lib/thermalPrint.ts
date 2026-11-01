@@ -1,4 +1,4 @@
-import { BRAND_ADDRESS, BRAND_EMAIL, BRAND_INSTAGRAM, BRAND_PRIMARY_PHONE_DISPLAY } from './brand'
+import { BRAND_ADDRESS, BRAND_EN, BRAND_GSTIN, BRAND_PRIMARY_PHONE_DISPLAY } from './brand'
 import { LOGO_BASE64 } from './logoBase64'
 import { formatCurrency, formatInvoiceNo } from './retail'
 import { printHtmlDocument } from './printHtml'
@@ -10,6 +10,8 @@ export interface ThermalReceiptData {
   phone?: string
   items: Array<{
     name: string
+    /** Size/variant shown in its own column. If omitted it is parsed from the name ("Shirt - 28" or "Shirt (28)"). */
+    size?: string
     qty: number
     unit?: string
     price: number
@@ -32,12 +34,38 @@ export interface ThermalReceiptData {
   storeEmail?: string
 }
 
+const DASH_LINE = '<div style="white-space: nowrap; overflow: hidden; line-height: 1.2;">' + '-'.repeat(80) + '</div>'
+
+const escapeHtml = (v: unknown) =>
+  String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** Splits "LUKER - 28" / "LUKER (28)" into name + size. */
+function splitNameAndSize(name: string, size?: string): { name: string; size: string } {
+  const clean = String(name || '').trim()
+  if (size && size.trim()) {
+    const sz = size.trim()
+    const stripped = clean
+      .replace(new RegExp(`\\s*-\\s*${sz.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'), '')
+      .replace(new RegExp(`\\s*\\(\\s*${sz.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\)$`, 'i'), '')
+    return { name: stripped || clean, size: sz }
+  }
+  const dash = clean.match(/^(.*\S)\s+-\s+([^-]+)$/)
+  if (dash) return { name: dash[1].trim(), size: dash[2].trim() }
+  const paren = clean.match(/^(.*\S)\s*\(([^()]+)\)$/)
+  if (paren) return { name: paren[1].trim(), size: paren[2].trim() }
+  return { name: clean, size: '' }
+}
+
+const money = (n: number) => (Number(n) || 0).toFixed(2)
+
 export function printThermalReceipt(data: ThermalReceiptData) {
   try {
-    const dateStr = (() => {
-      try { return new Date(data.date).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }
-      catch { return new Date().toLocaleString('en-IN') }
+    const parsedDate = (() => {
+      const d = new Date(data.date)
+      return isNaN(d.getTime()) ? new Date() : d
     })()
+    const dateOnly = parsedDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    const timeOnly = parsedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
 
     const formatCustomerPhone = (phone?: string): string => {
       if (!phone) return ''
@@ -67,7 +95,7 @@ export function printThermalReceipt(data: ThermalReceiptData) {
           }
           body {
             font-family: 'Courier New', Courier, monospace, sans-serif;
-            font-size: 12px;
+            font-size: 13px;
             color: #000;
             font-weight: 700;
             -webkit-text-stroke: 0.35px #000;
@@ -96,107 +124,75 @@ export function printThermalReceipt(data: ThermalReceiptData) {
       </head>
       <body>
         <div class="text-center mb-2">
-          <img src="${LOGO_BASE64}" style="width: 48px; height: 48px; object-fit: contain; margin: 0 auto 6px auto; display: block;" alt="Universal Look Logo" />
-          <div style="font-size: 10.5px; margin-top: 2px; line-height: 1.3; color: #000; font-weight: 700;">${data.storeAddress || BRAND_ADDRESS}</div>
-          <div class="mt-1" style="font-size: 11px; font-weight: 900; color: #000;">Ph: ${BRAND_PRIMARY_PHONE_DISPLAY}</div>
-          <div style="font-size: 10px; color: #000; font-weight: 700;">${data.storeEmail || BRAND_EMAIL} | Insta: @${BRAND_INSTAGRAM}</div>
+          <!-- Logo artwork includes its own wording; crop to the stag/wings so the heading below isn't repeated -->
+          <div style="width: 44mm; height: 21mm; overflow: hidden; margin: 0 auto 2px auto; position: relative;">
+            <img src="${LOGO_BASE64}" style="position: absolute; left: 0; top: -4.3mm; width: 44mm; height: 44mm;" alt="Universal Look Logo" />
+          </div>
+          <div style="font-family: Arial, Helvetica, sans-serif; font-size: 22px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; line-height: 1.1; margin-bottom: 4px;">${BRAND_EN}</div>
+          <div style="font-size: 13px; line-height: 1.3;">${escapeHtml(data.storeAddress || BRAND_ADDRESS).replace(/\s+(Chennai)/i, '<br>$1')}</div>
+          <div style="font-size: 13px; line-height: 1.3;">Phone: ${BRAND_PRIMARY_PHONE_DISPLAY}</div>
+          <div style="font-size: 13px; line-height: 1.3;">GSTIN: ${BRAND_GSTIN}</div>
         </div>
 
-        <div class="border-bottom border-top" style="font-size: 11px;">
-          <div>Inv: #${formatInvoiceNo(data.invoiceNo)}</div>
-          <div>Date: ${dateStr}</div>
-          ${data.customerName ? `<div>Name: ${data.customerName}</div>` : ''}
+        ${DASH_LINE}
+        <div style="font-size: 13px; line-height: 1.3; margin: 4px 0;">
+          <div>Invoice No: #${formatInvoiceNo(data.invoiceNo)}</div>
+          ${data.customerName ? `<div>Customer Name: ${escapeHtml(data.customerName)}</div>` : ''}
           ${data.phone ? `<div>Tel: ${formatCustomerPhone(data.phone)}</div>` : ''}
+          <div>Date: ${dateOnly}</div>
+          <div>Time: ${timeOnly.toLowerCase()}</div>
         </div>
+        ${DASH_LINE}
 
-        <table class="border-bottom" style="width: 100%; table-layout: fixed; border-collapse: collapse;">
+        <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px;">
           <thead>
-            <tr style="font-size: 11px; color: #000; border-bottom: 1px dashed #000;">
-              <th style="width: 50%; text-align: left; padding: 4px 0;">Item Name</th>
-              <th style="width: 18%; text-align: center; padding: 4px 0;">Qty</th>
-              <th style="width: 32%; text-align: right; padding: 4px 0;">Amount</th>
+            <tr>
+              <th style="width: 27%; text-align: left;">Item</th>
+              <th style="width: 15%; text-align: left;">Size</th>
+              <th style="width: 10%; text-align: right;">Qty</th>
+              <th style="width: 23%; text-align: right;">Rate</th>
+              <th style="width: 25%; text-align: right;">Amount</th>
             </tr>
           </thead>
+        </table>
+        ${DASH_LINE}
+        <table style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px;">
           <tbody>
             ${data.items.map(item => {
               const lineTotal = item.line_total ?? (item.qty * item.price)
-              const unit = item.unit && item.unit !== 'unit' && item.unit !== 'piece' ? item.unit : ''
-              const rateDisplay = `${formatCurrency(item.price)}${unit ? `/${unit}` : ''}`
+              const { name, size } = splitNameAndSize(item.name, item.size)
               return `
                 <tr>
-                  <td style="text-align: left; padding: 3px 2px 3px 0; vertical-align: top; word-break: break-word;">
-                    <div style="font-size: 12px; font-weight: 900; color: #000; line-height: 1.25;">${item.name}</div>
-                    <div style="font-size: 10px; color: #000; font-weight: 700; margin-top: 1px;">@ ${rateDisplay}</div>
-                  </td>
-                  <td style="text-align: center; vertical-align: top; padding: 3px 0; font-size: 12px; font-weight: 900; color: #000;">
-                    ${item.qty}
-                  </td>
-                  <td style="text-align: right; vertical-align: top; padding: 3px 0; font-size: 12px; font-weight: 900; color: #000;">
-                    ${formatCurrency(lineTotal)}
-                  </td>
+                  <td style="width: 27%; text-align: left; word-break: break-word; padding-right: 2px;">${escapeHtml(name)}</td>
+                  <td style="width: 15%; text-align: left; word-break: break-word;">${escapeHtml(size)}</td>
+                  <td style="width: 10%; text-align: right;">${item.qty}</td>
+                  <td style="width: 23%; text-align: right;">${money(item.price)}</td>
+                  <td style="width: 25%; text-align: right;">${money(lineTotal)}</td>
                 </tr>
               `
             }).join('')}
           </tbody>
         </table>
+        ${DASH_LINE}
 
-        <div class="border-bottom" style="font-size: 12px;">
-          <table style="width: 100%;">
-            ${data.subtotal !== data.total ? `
-              <tr>
-                <td class="text-left">Subtotal</td>
-                <td class="text-right">${formatCurrency(data.subtotal)}</td>
-              </tr>
-            ` : ''}
-            ${(data.couponDiscount || 0) > 0 ? `
-              <tr>
-                <td class="text-left">Coupon</td>
-                <td class="text-right">-${formatCurrency(data.couponDiscount || 0)}</td>
-              </tr>
-            ` : ''}
-            ${(data.manualDiscount || 0) > 0 ? `
-              <tr>
-                <td class="text-left">Manual Disc.</td>
-                <td class="text-right">-${formatCurrency(data.manualDiscount || 0)}</td>
-              </tr>
-            ` : ''}
-            ${(data.cgst || 0) > 0 || (data.sgst || 0) > 0 ? `
-              <tr>
-                <td class="text-left">CGST</td>
-                <td class="text-right">+${formatCurrency(data.cgst || 0)}</td>
-              </tr>
-              <tr>
-                <td class="text-left">SGST</td>
-                <td class="text-right">+${formatCurrency(data.sgst || 0)}</td>
-              </tr>
-            ` : (data.totalGst || 0) > 0 ? `
-              <tr>
-                <td class="text-left">GST</td>
-                <td class="text-right">+${formatCurrency(data.totalGst || 0)}</td>
-              </tr>
-            ` : ''}
-            ${data.shipping > 0 ? `
-              <tr>
-                <td class="text-left">Delivery</td>
-                <td class="text-right">${formatCurrency(data.shipping)}</td>
-              </tr>
-            ` : ''}
-            <tr class="font-bold" style="font-size: 14px;">
-              <td class="text-left">Total</td>
-              <td class="text-right">${formatCurrency(data.total)}</td>
-            </tr>
-            ${(data.paymentRows || []).map(row => `
-              <tr style="${row.sub ? 'font-size: 11px; color: #000;' : row.accent ? 'font-weight: 900;' : ''}">
-                <td class="text-left">${row.sub ? '&nbsp;&nbsp;' : ''}${row.label}</td>
-                <td class="text-right">${formatCurrency(row.value)}</td>
-              </tr>
-            `).join('')}
-          </table>
-        </div>
+        <table style="width: 100%; font-size: 13px; margin: 2px 0;">
+          ${data.subtotal !== data.total ? `<tr><td class="text-right">Subtotal: ${formatCurrency(data.subtotal)}</td></tr>` : ''}
+          ${(data.couponDiscount || 0) > 0 ? `<tr><td class="text-right">Coupon: -${formatCurrency(data.couponDiscount || 0)}</td></tr>` : ''}
+          ${(data.manualDiscount || 0) > 0 ? `<tr><td class="text-right">Manual Disc.: -${formatCurrency(data.manualDiscount || 0)}</td></tr>` : ''}
+          ${(data.cgst || 0) > 0 || (data.sgst || 0) > 0 ? `
+            <tr><td class="text-right">CGST: +${formatCurrency(data.cgst || 0)}</td></tr>
+            <tr><td class="text-right">SGST: +${formatCurrency(data.sgst || 0)}</td></tr>
+          ` : (data.totalGst || 0) > 0 ? `<tr><td class="text-right">GST: +${formatCurrency(data.totalGst || 0)}</td></tr>` : ''}
+          ${data.shipping > 0 ? `<tr><td class="text-right">Delivery: ${formatCurrency(data.shipping)}</td></tr>` : ''}
+          <tr><td class="text-right" style="font-size: 17px; font-weight: 900;">Total Amount: ${formatCurrency(data.total)}</td></tr>
+          ${(data.paymentRows || []).map(row => `
+            <tr><td class="text-right" style="${row.accent ? 'font-weight: 900;' : ''}">${escapeHtml(row.label)}: ${formatCurrency(row.value)}</td></tr>
+          `).join('')}
+        </table>
+        ${DASH_LINE}
 
-        <div class="text-center mt-2" style="font-size: 11px;">
+        <div class="text-center mt-2" style="font-size: 13px;">
           <div class="font-bold">Thank you for shopping at UNIVERSAL LOOK!</div>
-          <div>Follow us on Instagram: @${BRAND_INSTAGRAM}</div>
         </div>
       </body>
     </html>

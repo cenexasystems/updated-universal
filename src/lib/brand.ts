@@ -34,6 +34,7 @@ export const BRAND_WHATSAPP = '+91 91596 00067'
 export const WHATSAPP_NUM = '919159600067'
 export const BRAND_WHATSAPP_LINK = `https://wa.me/919159600067`
 
+export const BRAND_GSTIN = '33ASFPJ9395J1Z8'
 export const BRAND_EMAIL = 'universallook600067@gmail.com'
 export const BRAND_ADDRESS = '1/46 GNT Road, Sholavaram, Chennai - 600067'
 export const BRAND_INSTAGRAM = 'universallook600067'
