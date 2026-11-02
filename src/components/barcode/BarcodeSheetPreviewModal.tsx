@@ -1,11 +1,9 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Printer } from 'lucide-react'
-import {
-  type BarcodeQueueItem,
-  type LabelSizeConfig,
-  renderBarcodeSvg,
-} from '../../lib/barcode'
+import { type BarcodeQueueItem, type LabelSizeConfig } from '../../lib/barcode'
+import { BRAND_EN } from '../../lib/brand'
+import { BarcodeLabel } from './BarcodeLabel'
 
 interface BarcodeSheetPreviewModalProps {
   isOpen: boolean
@@ -13,6 +11,10 @@ interface BarcodeSheetPreviewModalProps {
   items: BarcodeQueueItem[]
   sizeConfig: LabelSizeConfig
   onPrint: () => void
+  /** Same toggles the printed sticker honours (all on by default). */
+  showCompanyName?: boolean
+  showItemName?: boolean
+  showSalePrice?: boolean
 }
 
 export const BarcodeSheetPreviewModal: React.FC<BarcodeSheetPreviewModalProps> = ({
@@ -21,8 +23,10 @@ export const BarcodeSheetPreviewModal: React.FC<BarcodeSheetPreviewModalProps> =
   items,
   sizeConfig,
   onPrint,
+  showCompanyName = true,
+  showItemName = true,
+  showSalePrice = true,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null)
 
   // Expand all selected queue items into individual labels based on `noOfLabels`
   const individualLabels: BarcodeQueueItem[] = []
@@ -35,40 +39,8 @@ export const BarcodeSheetPreviewModal: React.FC<BarcodeSheetPreviewModalProps> =
       }
     })
 
-  // Proportional card dimensions for preview sheet (matches physical label aspect ratio)
-  const cardScale = Math.min(4.8, 195 / sizeConfig.widthMm)
-  const cardWidthPx = Math.max(130, Math.round(sizeConfig.widthMm * cardScale))
-  const cardHeightPx = Math.max(85, Math.round(sizeConfig.heightMm * cardScale))
-  const cardBarcodeHeightPx = Math.max(22, Math.round(cardHeightPx * 0.48))
-  const cardBarcodeWidth = Math.max(0.80, Math.min(1.85, Math.round(((cardWidthPx * 0.85) / 115) * 100) / 100))
-
-  useEffect(() => {
-    if (!isOpen || !containerRef.current) return
-
-    // Render SVG barcode for each label using calculated dimensions
-    const svgs = containerRef.current.querySelectorAll<SVGSVGElement>('svg.preview-barcode-svg')
-    svgs.forEach((svg) => {
-      const code = svg.getAttribute('data-barcode')
-      if (code) {
-        renderBarcodeSvg(svg, code, {
-          width: cardBarcodeWidth,
-          height: cardBarcodeHeightPx,
-          fontSize: Math.max(7, Math.round(cardHeightPx * 0.08)),
-          displayValue: false,
-          margin: 0,
-        })
-      }
-    })
-  }, [
-    isOpen,
-    individualLabels.length,
-    sizeConfig.id,
-    sizeConfig.widthMm,
-    sizeConfig.heightMm,
-    cardBarcodeHeightPx,
-    cardBarcodeWidth,
-    cardHeightPx,
-  ])
+  // The preview shows the real sticker (same layout as the printed one), scaled up for readability
+  const previewZoom = Math.min(1.6, 230 / (sizeConfig.widthMm * 3.7795))
 
   // Lock body scrolling and close on Escape
   useEffect(() => {
@@ -111,7 +83,6 @@ export const BarcodeSheetPreviewModal: React.FC<BarcodeSheetPreviewModalProps> =
 
         {/* Preview Sheet Body */}
         <div
-          ref={containerRef}
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 bg-gray-100/70 flex justify-center"
         >
           <div className="flex flex-wrap items-center justify-center gap-4 w-full">
@@ -120,78 +91,21 @@ export const BarcodeSheetPreviewModal: React.FC<BarcodeSheetPreviewModalProps> =
                 <span className="text-[10px] font-bold text-gray-500 mb-1.5 font-mono">
                   Page {idx + 1}
                 </span>
-                <div
-                  className="bg-white rounded-xl border border-gray-300 p-2.5 shadow-sm flex flex-col justify-between items-center text-center relative transition-all"
-                  style={{
-                    width: `${cardWidthPx}px`,
-                    height: `${cardHeightPx}px`,
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {/* Header */}
-                  {label.header && (
-                    <span
-                      className="font-black uppercase tracking-wider text-gray-900 leading-none truncate max-w-[90%]"
-                      style={{ fontSize: `${Math.max(7.5, Math.round(cardHeightPx * 0.09))}px` }}
-                    >
-                      {label.header}
-                    </span>
-                  )}
-
-                {/* Barcode Graphic Box (occupies ~48% height) */}
-                <div
-                  className="w-full flex items-center justify-center overflow-hidden my-0.5"
-                  style={{ height: `${cardBarcodeHeightPx}px` }}
-                >
-                  <svg
-                    className="preview-barcode-svg max-w-[98%] max-h-full h-auto"
-                    data-barcode={label.barcodeValue}
+                <div style={{ zoom: previewZoom }}>
+                  <BarcodeLabel
+                    productName={label.productName}
+                    variantName={label.variantName}
+                    barcodeValue={label.barcodeValue}
+                    price={label.price}
+                    storeName={label.header || BRAND_EN}
+                    widthMm={sizeConfig.widthMm}
+                    heightMm={sizeConfig.heightMm}
+                    showBrand={showCompanyName}
+                    showTitle={showItemName}
+                    showPrice={showSalePrice}
                   />
                 </div>
-
-                {/* Item Code Number */}
-                <span
-                  className="font-mono font-bold text-gray-800 tracking-wider leading-none"
-                  style={{ fontSize: `${Math.max(7, Math.round(cardHeightPx * 0.075))}px` }}
-                >
-                  {label.barcodeValue}
-                </span>
-
-                {/* Lines */}
-                {label.line1 && (
-                  <span
-                    className="font-bold text-gray-700 truncate max-w-full leading-tight"
-                    style={{ fontSize: `${Math.max(7, Math.round(cardHeightPx * 0.075))}px` }}
-                  >
-                    {label.line1}
-                  </span>
-                )}
-                {label.line2 && (
-                  <span
-                    className="font-semibold text-gray-600 truncate max-w-full leading-tight"
-                    style={{ fontSize: `${Math.max(6.5, Math.round(cardHeightPx * 0.07))}px` }}
-                  >
-                    {label.line2}
-                  </span>
-                )}
-                {label.line3 && (
-                  <span
-                    className="font-black text-[#111111] truncate max-w-full leading-none"
-                    style={{ fontSize: `${Math.max(8, Math.round(cardHeightPx * 0.095))}px` }}
-                  >
-                    {label.line3}
-                  </span>
-                )}
-                {label.line4 && (
-                  <span
-                    className="text-gray-500 truncate max-w-full leading-none"
-                    style={{ fontSize: `${Math.max(6, Math.round(cardHeightPx * 0.065))}px` }}
-                  >
-                    {label.line4}
-                  </span>
-                )}
               </div>
-            </div>
           ))}
           </div>
         </div>

@@ -228,15 +228,6 @@ export const BarcodeSettingsDrawer: React.FC<BarcodeSettingsDrawerProps> = ({
                   />
                   Item Name
                 </label>
-                <label className="flex items-center gap-2.5 text-xs font-bold text-gray-700 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.showDiscount}
-                    onChange={() => handleFieldToggle('showDiscount')}
-                    className="accent-[#111111] w-4 h-4 rounded cursor-pointer"
-                  />
-                  Discount / MRP
-                </label>
               </div>
             </div>
           </div>

@@ -18,15 +18,15 @@ import {
   type LabelSizeConfig,
   getStoredBarcodeSettings,
   getAllLabelSizes,
-  renderBarcodeSvg,
-  generateBarcodeSvgString,
 } from '../../lib/barcode'
+import { buildStickerHtml, buildStickerCss, buildStickerBarcodeSvg } from '../../lib/stickerPrint'
 import { BRAND_EN } from '../../lib/brand'
 import { barcodeService } from '../../services/barcodeService'
 import { fetchVariantsByProduct, type ProductVariant } from '../../services/variantService'
 import { useProductStore } from '../../store/store'
 import { BarcodeSettingsDrawer } from './BarcodeSettingsDrawer'
 import { BarcodeSheetPreviewModal } from './BarcodeSheetPreviewModal'
+import { BarcodeLabel } from './BarcodeLabel'
 
 interface ProductOption {
   id: number
@@ -99,10 +99,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
   const [itemCode, setItemCode] = useState('')
   const [noOfLabels, setNoOfLabels] = useState<string>('1')
   const [header, setHeader] = useState(BRAND_EN)
-  const [line1, setLine1] = useState('')
-  const [line2, setLine2] = useState('')
-  const [line3, setLine3] = useState('Discount: 0%')
-  const [line4, setLine4] = useState('')
 
   // Queue of items to generate (Bottom Table)
   const [queue, setQueue] = useState<BarcodeQueueItem[]>([])
@@ -112,15 +108,11 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   // Preview SVG Ref
-  const previewSvgRef = useRef<SVGSVGElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const allSizes = getAllLabelSizes()
   const currentSizeConfig: LabelSizeConfig =
     allSizes.find((s) => s.id === settings.selectedSizeId) || allSizes[0]
-
-  const isSmall = currentSizeConfig.heightMm <= 25
-  const isLarge = currentSizeConfig.heightMm >= 40
 
   const selectProductItem = useCallback(async (prod: ProductOption, targetVariantId?: string | null) => {
     setSelectedProduct(prod)
@@ -130,9 +122,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
     // Set default item code (product barcode or generate new code)
     const code = prod.barcode || `UL${Math.floor(1000000 + Math.random() * 9000000)}`
     setItemCode(code)
-    setLine1(prod.name)
-    setLine2(prod.category || '')
-    setLine3(settings.showDiscount ? 'Discount: 0%' : `Price: ₹${prod.price}`)
 
     // Fetch variants if applicable
     if (prod.has_variants) {
@@ -144,10 +133,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
           const chosen = matched || vars[0]
           setSelectedVariant(chosen)
           if (chosen.barcode) setItemCode(chosen.barcode)
-          setLine2(`Size: ${chosen.variantName}`)
-          if (chosen.price) {
-            setLine3(settings.showDiscount ? 'Discount: 0%' : `Price: ₹${chosen.price}`)
-          }
         }
       } catch (err) {
         console.error('Failed to load variants:', err)
@@ -156,7 +141,7 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
       setVariants([])
       setSelectedVariant(null)
     }
-  }, [settings.showDiscount])
+  }, [])
 
   // Initialize with preselected product if passed
   useEffect(() => {
@@ -179,42 +164,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Update live preview SVG with dynamic dimension calculations
-  useEffect(() => {
-    const codeToRender = (itemCode && itemCode.trim()) || 'UL0000000'
-
-    // Proportional preview dimensions: fit comfortably within preview box
-    const previewScale = Math.min(230 / currentSizeConfig.widthMm, 150 / currentSizeConfig.heightMm)
-    const previewWidth = Math.round(currentSizeConfig.widthMm * previewScale)
-    const previewHeight = Math.round(currentSizeConfig.heightMm * previewScale)
-    const previewBarcodeHeight = Math.max(26, Math.round(previewHeight * 0.46))
-    const codeLength = codeToRender.length
-    const previewBarcodeWidth = Math.max(
-      0.82,
-      Math.min(1.85, Math.round(((previewWidth * 0.84) / ((codeLength + 2) * 11 + 2)) * 100) / 100)
-    )
-
-    if (previewSvgRef.current) {
-      renderBarcodeSvg(previewSvgRef.current, codeToRender, {
-        width: previewBarcodeWidth,
-        height: previewBarcodeHeight,
-        fontSize: Math.max(7, Math.round(previewHeight * 0.08)),
-        displayValue: false,
-        margin: 0,
-      })
-    }
-  }, [
-    itemCode,
-    header,
-    line1,
-    line2,
-    line3,
-    line4,
-    currentSizeConfig.id,
-    currentSizeConfig.widthMm,
-    currentSizeConfig.heightMm,
-  ])
-
   // Determine if currently selected item / variant already has a barcode assigned
   const assignedBarcode = selectedVariant
     ? (selectedVariant.barcode && selectedVariant.barcode.trim().length > 0 ? selectedVariant.barcode.trim() : null)
@@ -227,10 +176,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
     if (!v) return
     setSelectedVariant(v)
     if (v.barcode) setItemCode(v.barcode)
-    setLine2(`Size: ${v.variantName}`)
-    if (v.price) {
-      setLine3(settings.showDiscount ? 'Discount: 0%' : `Price: ₹${v.price}`)
-    }
   }
 
   const handleAssignCode = () => {
@@ -284,10 +229,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
       costPrice: selectedProduct.cost_price || 0,
       noOfLabels: finalLabels,
       header: header.trim(),
-      line1: line1.trim(),
-      line2: line2.trim(),
-      line3: line3.trim(),
-      line4: line4.trim(),
       selected: true,
     }
 
@@ -388,50 +329,21 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
       }
 
     const isThermal = settings.printerType === 'label'
-    const isSmall = currentSizeConfig.heightMm <= 25
-    const isLarge = currentSizeConfig.heightMm >= 40
 
-    // Proportional barcode sizing preventing detail overlaps
-    const barcodeHeightPx = Math.max(16, Math.round(currentSizeConfig.heightMm * 0.32 * 3.7795))
-    const printableWidthPx = Math.max(30, (currentSizeConfig.widthMm - 4) * 3.7795)
-    const barcodeBarWidth = Math.max(0.80, Math.min(1.70, Math.round((printableWidthPx / 120) * 100) / 100))
-    const barcodeFontSize = Math.max(6, Math.min(9.5, Math.round(currentSizeConfig.heightMm * 0.20 * 10) / 10))
-
-    const headerFontSize = isSmall ? '7pt' : isLarge ? '10.5pt' : '8.5pt'
-    const titleFontSize = isSmall ? '6pt' : isLarge ? '9pt' : '7.5pt'
-    const tagFontSize = isSmall ? '5.5pt' : isLarge ? '8.5pt' : '7pt'
-    const priceFontSize = isSmall ? '8pt' : isLarge ? '12pt' : '9.5pt'
-    const stickerPadding = isSmall ? '0.6mm 1.2mm' : '1.0mm 1.6mm'
-
-    // Generate individual sticker cards HTML with pre-rendered SVGs
+    // Sticker design lives in lib/stickerPrint so every print path stays identical
     const allStickers: string[] = []
     selectedItems.forEach((item) => {
       const count = Math.max(1, item.noOfLabels)
       const fullTitle = `${item.productName}${item.variantName ? ` (${item.variantName})` : ''}`
-      const svgMarkup = generateBarcodeSvgString(item.barcodeValue, {
-        width: barcodeBarWidth,
-        height: barcodeHeightPx,
-        fontSize: barcodeFontSize,
-        font: 'Arial, sans-serif',
-        margin: 0,
-        textMargin: 1.5,
-        displayValue: true,
-      })
-      for (let i = 0; i < count; i++) {
-        allStickers.push(`
-          <div class="label-sticker">
-            ${settings.showCompanyName ? `<div class="header">${item.header || BRAND_EN}</div>` : ''}
-            ${settings.showItemName ? `<div class="prod-title">${fullTitle}</div>` : ''}
-            <div class="barcode-box">
-              ${svgMarkup}
-            </div>
-            <div class="footer">
-              <span>${item.line2 ? `<span class="tag">${item.line2}</span>` : '<span class="tag">UNIVERSAL LOOK</span>'}</span>
-              ${settings.showSalePrice ? `<span class="price">₹${item.price}</span>` : ''}
-            </div>
-          </div>
-        `)
+      const stickerData = {
+        brand: settings.showCompanyName ? (item.header || BRAND_EN) : null,
+        title: settings.showItemName ? fullTitle : null,
+        barcodeValue: item.barcodeValue,
+        price: settings.showSalePrice ? item.price : null,
       }
+      const svg = buildStickerBarcodeSvg(item.barcodeValue, currentSizeConfig.widthMm, currentSizeConfig.heightMm)
+      const html = buildStickerHtml(stickerData, currentSizeConfig.widthMm, currentSizeConfig.heightMm, svg)
+      for (let i = 0; i < count; i++) allStickers.push(html)
     })
 
     let bodyContent = ''
@@ -508,83 +420,7 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
             .sticker-row + .sticker-row {
               ${isThermal ? 'break-before: page !important; page-break-before: always !important;' : ''}
             }
-            .label-sticker {
-              width: ${currentSizeConfig.widthMm}mm !important;
-              height: ${currentSizeConfig.heightMm}mm !important;
-              max-width: ${currentSizeConfig.widthMm}mm !important;
-              max-height: ${currentSizeConfig.heightMm}mm !important;
-              box-sizing: border-box;
-              padding: ${stickerPadding};
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-              align-items: center;
-              text-align: center;
-              overflow: hidden;
-              flex-shrink: 0;
-              break-inside: avoid !important;
-              page-break-inside: avoid !important;
-              background: #fff;
-              ${!isThermal ? 'border: 0.2mm dashed #bbb;' : ''}
-            }
-            .header {
-              font-size: ${headerFontSize};
-              font-weight: 900;
-              letter-spacing: 0.3px;
-              text-transform: uppercase;
-              line-height: 1.1;
-              color: #000;
-              flex-shrink: 0;
-            }
-            .prod-title {
-              font-size: ${titleFontSize};
-              font-weight: 700;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              max-width: 98%;
-              margin-top: 0.3mm;
-              color: #111;
-              line-height: 1.1;
-            }
-            .barcode-box {
-              width: 100%;
-              flex: 1;
-              min-height: 0;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              margin: 0.4mm 0;
-              overflow: hidden;
-            }
-            .barcode-box svg {
-              display: block;
-              margin: 0 auto;
-              max-width: 98%;
-              max-height: 100%;
-              width: auto;
-              height: auto;
-            }
-            .footer {
-              width: 100%;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-top: 0.6pt solid #000;
-              padding-top: 0.5mm;
-              line-height: 1;
-              flex-shrink: 0;
-            }
-            .tag {
-              font-size: ${tagFontSize};
-              font-weight: 700;
-              color: #444;
-            }
-            .price {
-              font-size: ${priceFontSize};
-              font-weight: 900;
-              color: #000;
-            }
+            ${buildStickerCss(currentSizeConfig.widthMm, currentSizeConfig.heightMm, !isThermal)}
           </style>
         </head>
         <body data-gramm="false">
@@ -868,10 +704,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
                               costPrice: selectedProduct.cost_price || 0,
                               noOfLabels: parseInt(noOfLabels, 10) || 1,
                               header: header || BRAND_EN,
-                              line1: selectedProduct.name,
-                              line2: `Size: ${v.variantName}`,
-                              line3: settings.showDiscount ? 'Discount: 0%' : `Price: ₹${v.price || selectedProduct.price}`,
-                              line4: line4.trim(),
                               selected: true,
                             }))
 
@@ -914,8 +746,8 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
                     </div>
                   )}
 
-                  {/* Row 2: No of Labels, Header, Line 1 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Row 2: No of Labels, Header (everything else on the sticker comes from the product) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label htmlFor="barcode-no-of-labels" className="block text-[11px] font-black uppercase tracking-wider text-gray-700 mb-1">
                         No of Labels <span className="text-red-500">*</span>
@@ -949,66 +781,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
                         className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-900 outline-none focus:border-[#111111]"
                       />
                     </div>
-                    <div>
-                      <label htmlFor="barcode-line1" className="block text-[11px] font-black uppercase tracking-wider text-gray-700 mb-1">
-                        Line 1
-                      </label>
-                      <input
-                        id="barcode-line1"
-                        name="line1"
-                        type="text"
-                        placeholder="Enter Line 1"
-                        value={line1}
-                        onChange={(e) => setLine1(e.target.value)}
-                        className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-900 outline-none focus:border-[#111111]"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 3: Line 2, Line 3, Line 4 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label htmlFor="barcode-line2" className="block text-[11px] font-black uppercase tracking-wider text-gray-700 mb-1">
-                        Line 2
-                      </label>
-                      <input
-                        id="barcode-line2"
-                        name="line2"
-                        type="text"
-                        placeholder="Enter Line 2"
-                        value={line2}
-                        onChange={(e) => setLine2(e.target.value)}
-                        className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-900 outline-none focus:border-[#111111]"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="barcode-line3" className="block text-[11px] font-black uppercase tracking-wider text-gray-700 mb-1">
-                        Line 3
-                      </label>
-                      <input
-                        id="barcode-line3"
-                        name="line3"
-                        type="text"
-                        placeholder="Enter Line 3"
-                        value={line3}
-                        onChange={(e) => setLine3(e.target.value)}
-                        className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-900 outline-none focus:border-[#111111]"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="barcode-line4" className="block text-[11px] font-black uppercase tracking-wider text-gray-700 mb-1">
-                        Line 4
-                      </label>
-                      <input
-                        id="barcode-line4"
-                        name="line4"
-                        type="text"
-                        placeholder="Enter Line 4"
-                        value={line4}
-                        onChange={(e) => setLine4(e.target.value)}
-                        className="w-full h-10 px-3 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-900 outline-none focus:border-[#111111]"
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -1025,89 +797,21 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
 
                   {/* Canvas backing representing paper roll / sheet */}
                   <div className="w-full rounded-2xl bg-[#F9FAFB] border border-gray-300 p-3.5 shadow-inner flex flex-col items-center justify-center relative min-h-[220px] overflow-hidden">
-                    {(() => {
-                      const previewScale = Math.min(230 / currentSizeConfig.widthMm, 150 / currentSizeConfig.heightMm)
-                      const previewWidthPx = Math.max(140, Math.round(currentSizeConfig.widthMm * previewScale))
-                      const previewHeightPx = Math.max(90, Math.round(currentSizeConfig.heightMm * previewScale))
-                      const previewBarcodeHeightPx = Math.max(26, Math.round(previewHeightPx * 0.46))
-
-                      return (
-                        <div
-                          className="bg-white border border-gray-300 rounded-xl p-2.5 shadow-sm flex flex-col justify-between items-center text-center relative transition-all"
-                          style={{
-                            width: `${previewWidthPx}px`,
-                            height: `${previewHeightPx}px`,
-                            boxSizing: 'border-box',
-                          }}
-                        >
-                          {/* Company / Brand */}
-                          {settings.showCompanyName && (
-                            <span
-                              className="font-black uppercase tracking-wider text-gray-900 leading-none truncate max-w-[78%]"
-                              style={{ fontSize: `${Math.max(8, Math.round(previewHeightPx * 0.085))}px` }}
-                            >
-                              {header || BRAND_EN}
-                            </span>
-                          )}
-
-                          {/* Barcode Graphic Box (takes ~46% height) */}
-                          <div
-                            className="w-full flex items-center justify-center overflow-hidden my-0.5"
-                            style={{ height: `${previewBarcodeHeightPx}px` }}
-                          >
-                            <svg ref={previewSvgRef} className="max-w-[98%] max-h-full h-auto" />
-                          </div>
-
-                          {/* Barcode number text */}
-                          <span
-                            className="font-mono font-bold text-gray-800 tracking-wider leading-none"
-                            style={{ fontSize: `${Math.max(7.5, Math.round(previewHeightPx * 0.075))}px` }}
-                          >
-                            {itemCode || 'UL0000000'}
-                          </span>
-
-                          {/* Product Title */}
-                          {settings.showItemName && (
-                            <span
-                              className="font-bold text-gray-800 truncate max-w-full leading-tight"
-                              style={{ fontSize: `${Math.max(7.5, Math.round(previewHeightPx * 0.075))}px` }}
-                            >
-                              {line1 || selectedProduct?.name || 'Item Name'}
-                            </span>
-                          )}
-
-                          {/* Variant / Category */}
-                          {line2 && (
-                            <span
-                              className="font-semibold text-gray-600 truncate max-w-full leading-tight"
-                              style={{ fontSize: `${Math.max(7, Math.round(previewHeightPx * 0.07))}px` }}
-                            >
-                              {line2}
-                            </span>
-                          )}
-
-                          {/* Price */}
-                          {settings.showSalePrice && (
-                            <span
-                              className="font-black text-black truncate max-w-full leading-none"
-                              style={{ fontSize: `${Math.max(8.5, Math.round(previewHeightPx * 0.095))}px` }}
-                            >
-                              {line3 || (settings.showDiscount ? 'Discount: 0%' : 'Price: ₹0')}
-                            </span>
-                          )}
-
-                          {/* Extra line */}
-                          {line4 && (
-                            <span
-                              className="text-gray-500 truncate max-w-full leading-none"
-                              style={{ fontSize: `${Math.max(6.5, Math.round(previewHeightPx * 0.065))}px` }}
-                            >
-                              {line4}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })()}
+                    {/* Same component the print preview uses, so what you see is the printed layout */}
+                    <div style={{ zoom: Math.min(1.6, 230 / (currentSizeConfig.widthMm * 3.7795)) }}>
+                      <BarcodeLabel
+                        productName={selectedProduct?.name || 'Item Name'}
+                        variantName={selectedVariant?.variantName}
+                        barcodeValue={(itemCode && itemCode.trim()) || 'UL0000000'}
+                        price={Number(selectedVariant?.price || selectedProduct?.price || 0)}
+                        storeName={header || BRAND_EN}
+                        widthMm={currentSizeConfig.widthMm}
+                        heightMm={currentSizeConfig.heightMm}
+                        showBrand={settings.showCompanyName}
+                        showTitle={settings.showItemName}
+                        showPrice={settings.showSalePrice}
+                      />
+                    </div>
 
                     <div className="mt-2.5 text-[10px] font-bold text-gray-500 text-center">
                       {settings.printerType === 'label'
@@ -1170,10 +874,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
                         <th className="p-3">Item Name</th>
                         <th className="p-3 w-28">No of Labels</th>
                         <th className="p-3">Header</th>
-                        <th className="p-3">Line 1</th>
-                        <th className="p-3">Line 2</th>
-                        <th className="p-3">Line 3</th>
-                        <th className="p-3">Line 4</th>
                         <th className="p-3 w-12 text-center">Action</th>
                       </tr>
                     </thead>
@@ -1222,46 +922,6 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
                                 handleUpdateQueueItem(item.id, 'header', e.target.value)
                               }
                               className="w-28 h-8 px-2 rounded-lg border border-gray-300 text-xs font-bold outline-none focus:border-[#111111]"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <input
-                              type="text"
-                              value={item.line1}
-                              onChange={(e) =>
-                                handleUpdateQueueItem(item.id, 'line1', e.target.value)
-                              }
-                              className="w-28 h-8 px-2 rounded-lg border border-gray-300 text-xs outline-none focus:border-[#111111]"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <input
-                              type="text"
-                              value={item.line2}
-                              onChange={(e) =>
-                                handleUpdateQueueItem(item.id, 'line2', e.target.value)
-                              }
-                              className="w-28 h-8 px-2 rounded-lg border border-gray-300 text-xs outline-none focus:border-[#111111]"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <input
-                              type="text"
-                              value={item.line3}
-                              onChange={(e) =>
-                                handleUpdateQueueItem(item.id, 'line3', e.target.value)
-                              }
-                              className="w-28 h-8 px-2 rounded-lg border border-gray-300 text-xs outline-none focus:border-[#111111]"
-                            />
-                          </td>
-                          <td className="p-3">
-                            <input
-                              type="text"
-                              value={item.line4}
-                              onChange={(e) =>
-                                handleUpdateQueueItem(item.id, 'line4', e.target.value)
-                              }
-                              className="w-28 h-8 px-2 rounded-lg border border-gray-300 text-xs outline-none focus:border-[#111111]"
                             />
                           </td>
                           <td className="p-3 text-center">
@@ -1374,6 +1034,9 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
           items={queue}
           sizeConfig={currentSizeConfig}
           onPrint={printQueueDirectly}
+          showCompanyName={settings.showCompanyName}
+          showItemName={settings.showItemName}
+          showSalePrice={settings.showSalePrice}
         />
       )}
     </>,

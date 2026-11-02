@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom'
 import { X, Printer, Copy, Check } from 'lucide-react'
 import { BarcodeLabel } from './BarcodeLabel'
 import { BRAND_EN } from '../../lib/brand'
-import { getAllLabelSizes, generateBarcodeSvgString, getStoredBarcodeSettings, saveStoredBarcodeSettings } from '../../lib/barcode'
+import { getAllLabelSizes, getStoredBarcodeSettings, saveStoredBarcodeSettings } from '../../lib/barcode'
+import { buildStickerHtml, buildStickerCss } from '../../lib/stickerPrint'
 
 export interface BarcodePrintModalProps {
   isOpen: boolean
@@ -105,55 +106,16 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
 
       const fullTitle = `${productName}${variantName ? ` (${variantName})` : ''}`
       const isThermal = printerType === 'label'
-      const isSmall = selectedPreset.heightMm <= 25
-      const isLarge = selectedPreset.heightMm >= 40
-
-      // Proportional barcode sizing preventing detail overlaps
-      // Barcode bars take ~32% of height for reliable scanning while leaving space for text and footer
-      const barcodeHeightPx = Math.max(16, Math.round(selectedPreset.heightMm * 0.32 * 3.7795))
-      const printableWidthPx = Math.max(30, (selectedPreset.widthMm - 4) * 3.7795)
-      const barcodeBarWidth = Math.max(0.80, Math.min(1.70, Math.round((printableWidthPx / 120) * 100) / 100))
-      const barcodeFontSize = Math.max(6, Math.min(9.5, Math.round(selectedPreset.heightMm * 0.20 * 10) / 10))
-
-      // Direct SVG generation without CDN script dependencies
-      const svgMarkup = generateBarcodeSvgString(barcodeValue, {
-        width: barcodeBarWidth,
-        height: barcodeHeightPx,
-        fontSize: barcodeFontSize,
-        font: 'Arial, sans-serif',
-        fontOptions: 'bold',
-        margin: 0,
-        textMargin: 1.5,
-        displayValue: true,
-      })
-
-      const titleFontSize = isSmall ? '6.5pt' : isLarge ? '9.5pt' : '8pt'
-      const tagFontSize = isSmall ? '5.5pt' : isLarge ? '8.5pt' : '7pt'
-      const priceFontSize = isSmall ? '14pt' : isLarge ? '20pt' : '17pt'
-      const stickerPadding = isSmall ? '0.6mm 1.2mm' : '1.0mm 1.6mm'
 
     // Build standalone HTML for the printed stickers with strict thermal proportions
     const parsedQty = parseInt(quantity.trim(), 10)
     const validQuantity = !isNaN(parsedQty) && parsedQty > 0 ? parsedQty : 1
-    // Shop name stretched to exactly the barcode's width (glyphs scale with the SVG)
-    const brandSvg = `<svg class="brand-svg" viewBox="0 0 200 20" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><text x="0" y="16" textLength="200" lengthAdjust="spacingAndGlyphs" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="19" fill="#000" stroke="#000" stroke-width="0.7">${BRAND_EN.toUpperCase()}</text></svg>`
-    const singleStickerHtml = `
-      <div class="sticker">
-        <div class="barcode-box">
-          <div class="bb">
-            ${brandSvg}
-            <div class="bc">${svgMarkup}</div>
-          </div>
-        </div>
-        <div class="footer">
-          <span class="footer-left">
-            <span class="prod-title">${fullTitle}</span>
-            ${mrp && mrp > price ? `<span class="mrp">MRP ₹${mrp}</span>` : ''}
-          </span>
-          <span class="price">₹${price}</span>
-        </div>
-      </div>
-    `
+    // Sticker design lives in lib/stickerPrint so every print path stays identical
+    const singleStickerHtml = buildStickerHtml(
+      { brand: BRAND_EN, title: fullTitle, barcodeValue, price, mrp },
+      selectedPreset.widthMm,
+      selectedPreset.heightMm,
+    )
 
     const columns = isThermal ? Math.max(1, selectedPreset.labelsPerRow || 1) : 1
     const gapMm = selectedPreset.horizontalGapMm || 0
@@ -249,105 +211,7 @@ export const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
               break-inside: avoid !important;
               page-break-inside: avoid !important;
             }
-            .sticker {
-              width: ${selectedPreset.widthMm}mm;
-              height: ${selectedPreset.heightMm}mm;
-              max-width: ${selectedPreset.widthMm}mm;
-              max-height: ${selectedPreset.heightMm}mm;
-              /* Increased horizontal padding to protect text from physical printer misalignment */
-              padding: ${isSmall ? '0.8mm 2mm' : '1.2mm 2.5mm'};
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-              align-items: center;
-              text-align: center;
-              overflow: hidden;
-              box-sizing: border-box;
-              flex-shrink: 0;
-              background: #fff;
-              ${!isThermal ? 'border: 0.2mm dashed #000;' : ''}
-            }
-            .bb {
-              display: flex;
-              flex-direction: column;
-              align-items: stretch;
-              max-width: 98%;
-              max-height: 100%;
-              min-height: 0;
-            }
-            .brand-svg {
-              display: block;
-              width: 0;
-              min-width: 100%;
-              height: auto;
-              margin-bottom: 0.6mm;
-              flex-shrink: 0;
-            }
-            .bc { display: flex; justify-content: center; min-height: 0; }
-            .barcode-box {
-              width: 100%;
-              flex: 1;
-              min-height: 0;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              margin: 0.4mm 0;
-              overflow: hidden;
-            }
-            .bc svg {
-              display: block;
-              margin: 0 auto;
-              max-width: 100%;
-              max-height: 100%;
-              width: auto;
-              height: auto;
-            }
-            .footer {
-              width: 100%;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-top: 0.6pt solid #000;
-              padding-top: 0.5mm;
-              line-height: 1;
-              flex-shrink: 0;
-            }
-            .footer-left {
-              display: flex;
-              flex-direction: column;
-              align-items: flex-start;
-              justify-content: center;
-              min-width: 0;
-              flex: 1;
-              margin-right: 1mm;
-              text-align: left;
-            }
-            .prod-title {
-              font-size: ${titleFontSize};
-              font-weight: 800;
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-              max-width: 100%;
-              color: #000;
-              -webkit-text-stroke: 0.2pt #000;
-              line-height: 1.1;
-            }
-            .mrp {
-              text-decoration: line-through;
-              color: #000;
-              font-size: ${tagFontSize};
-              font-weight: 800;
-              -webkit-text-stroke: 0.2pt #000;
-              line-height: 1.1;
-            }
-            .price {
-              font-size: ${priceFontSize};
-              font-weight: 900;
-              color: #000;
-              white-space: nowrap;
-              -webkit-text-stroke: 0.4pt #000;
-            }
+            ${buildStickerCss(selectedPreset.widthMm, selectedPreset.heightMm, !isThermal)}
           </style>
         </head>
         <body data-gramm="false">

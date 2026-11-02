@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { renderBarcodeSvg } from '../../lib/barcode'
 import { BRAND_EN } from '../../lib/brand'
-import { formatCurrency } from '../../lib/retail'
 
 export interface BarcodeLabelProps {
   productName: string
@@ -12,6 +11,10 @@ export interface BarcodeLabelProps {
   storeName?: string
   widthMm?: number
   heightMm?: number
+  /** Toggle parts of the sticker (all on by default). */
+  showBrand?: boolean
+  showTitle?: boolean
+  showPrice?: boolean
 }
 
 export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
@@ -23,6 +26,9 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
   storeName = BRAND_EN,
   widthMm = 50,
   heightMm = 30,
+  showBrand = true,
+  showTitle = true,
+  showPrice = true,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null)
   const isSmall = heightMm <= 25
@@ -72,7 +78,7 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
         style={{ margin: '0.4mm 0', minHeight: 0 }}
       >
         <div className="flex flex-col items-stretch min-h-0" style={{ maxWidth: '98%', maxHeight: '100%' }}>
-          <svg
+          {showBrand && <svg
             viewBox="0 0 200 20"
             preserveAspectRatio="none"
             className="block shrink-0"
@@ -93,9 +99,9 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
             >
               {storeName.toUpperCase()}
             </text>
-          </svg>
+          </svg>}
           <div className="flex justify-center min-h-0">
-            <svg ref={svgRef} className="block max-w-full max-h-full h-auto" />
+            <svg ref={svgRef} className="block max-w-full max-h-full h-auto" style={{ overflow: 'visible' }} />
           </div>
         </div>
       </div>
@@ -108,27 +114,27 @@ export const BarcodeLabel: React.FC<BarcodeLabelProps> = ({
         }}
       >
         <div className="flex flex-col items-start min-w-0 flex-1 mr-1 text-left">
-          <span
+          {showTitle && <span
             className="font-extrabold text-black truncate max-w-full leading-tight"
             style={{ fontSize: isSmall ? '7px' : isLarge ? '10px' : '8.5px', WebkitTextStroke: '0.25px #000' }}
           >
             {fullTitle}
-          </span>
+          </span>}
           {mrp && mrp > price && (
             <span className="text-black line-through font-bold" style={{ fontSize: isSmall ? '6px' : isLarge ? '8.5px' : '7.5px' }}>
-              MRP {formatCurrency(mrp)}
+              MRP ₹{mrp}
             </span>
           )}
         </div>
-        <span
+        {showPrice && <span
           className="font-black text-black whitespace-nowrap"
           style={{
             fontSize: isSmall ? '17px' : isLarge ? '25px' : '21px',
             WebkitTextStroke: '0.5px #000',
           }}
         >
-          {formatCurrency(price)}
-        </span>
+          ₹{price}
+        </span>}
       </div>
     </div>
   )
