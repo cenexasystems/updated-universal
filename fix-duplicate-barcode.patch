@@ -1,0 +1,68 @@
+diff --git a/src/components/barcode/CreateBarcodeModal.tsx b/src/components/barcode/CreateBarcodeModal.tsx
+index c5ce288..630b958 100644
+--- a/src/components/barcode/CreateBarcodeModal.tsx
++++ b/src/components/barcode/CreateBarcodeModal.tsx
+@@ -114,13 +114,16 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
+   const currentSizeConfig: LabelSizeConfig =
+     allSizes.find((s) => s.id === settings.selectedSizeId) || allSizes[0]
+ 
++  const newBarcodeCode = () => `UL${Math.floor(1000000 + Math.random() * 9000000)}`
++
+   const selectProductItem = useCallback(async (prod: ProductOption, targetVariantId?: string | null) => {
+     setSelectedProduct(prod)
+     setProductSearch(prod.name)
+     setDropdownOpen(false)
+ 
+-    // Set default item code (product barcode or generate new code)
+-    const code = prod.barcode || `UL${Math.floor(1000000 + Math.random() * 9000000)}`
++    // Default item code. A product with variants never reuses the product-level barcode:
++    // each size/variant owns its own code, otherwise labels of one size scan as another.
++    const code = (!prod.has_variants && prod.barcode) || `UL${Math.floor(1000000 + Math.random() * 9000000)}`
+     setItemCode(code)
+ 
+     // Fetch variants if applicable
+@@ -132,7 +135,7 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
+           const matched = targetVariantId ? vars.find(v => v.id === targetVariantId) : vars[0]
+           const chosen = matched || vars[0]
+           setSelectedVariant(chosen)
+-          if (chosen.barcode) setItemCode(chosen.barcode)
++          setItemCode(chosen.barcode?.trim() || `UL${Math.floor(1000000 + Math.random() * 9000000)}`)
+         }
+       } catch (err) {
+         console.error('Failed to load variants:', err)
+@@ -175,7 +178,8 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
+     const v = variants.find((item) => item.id === varId)
+     if (!v) return
+     setSelectedVariant(v)
+-    if (v.barcode) setItemCode(v.barcode)
++    // Use this variant's own code, or a fresh one. Never keep the previous variant's code.
++    setItemCode(v.barcode?.trim() || newBarcodeCode())
+   }
+ 
+   const handleAssignCode = () => {
+@@ -203,6 +207,25 @@ export const CreateBarcodeModal: React.FC<CreateBarcodeModalProps> = ({
+       return
+     }
+ 
++    // A barcode must identify exactly one product/variant. Refuse a code that already belongs to another one.
++    const code = itemCode.trim().toUpperCase()
++    const sameCode = (b?: string | null) => Boolean(b) && String(b).trim().toUpperCase() === code
++    const otherVariant = variants.find((v) => v.id !== selectedVariant?.id && sameCode(v.barcode))
++    const otherProduct = products.find((p) => p.id !== selectedProduct.id && sameCode(p.barcode))
++    const queued = queue.find((it) => sameCode(it.barcodeValue))
++    if (otherVariant || otherProduct || queued) {
++      const owner = otherVariant
++        ? `${selectedProduct.name} - ${otherVariant.variantName}`
++        : otherProduct
++          ? otherProduct.name
++          : `${queued?.productName}${queued?.variantName ? ` (${queued.variantName})` : ''}`
++      setStatusMessage({
++        type: 'error',
++        text: `Code ${code} is already used by ${owner}. Click "Assign Code" to generate a new one for this item.`,
++      })
++      return
++    }
++
+     const parsedLabels = parseInt(noOfLabels.trim(), 10)
+     const finalLabels = !isNaN(parsedLabels) && parsedLabels > 0 ? parsedLabels : 1
+ 
