@@ -34,7 +34,7 @@ export function getStickerSizing(widthMm: number, heightMm: number) {
   const barcodeHeightPx = Math.max(16, Math.round(heightMm * 0.27 * MM_TO_PX))
   const printableWidthPx = Math.max(30, (widthMm - 4) * MM_TO_PX)
   const barcodeBarWidth = Math.max(0.8, Math.min(1.7, Math.round((printableWidthPx / 120) * 100) / 100))
-  const barcodeFontSize = Math.max(6, Math.min(9.5, Math.round(heightMm * 0.2 * 10) / 10))
+  const barcodeFontSize = Math.max(7, Math.min(10.5, Math.round(heightMm * 0.22 * 10) / 10))
   return { isSmall, isLarge, barcodeHeightPx, barcodeBarWidth, barcodeFontSize }
 }
 

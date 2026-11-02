@@ -192,6 +192,12 @@ export function renderBarcodeSvg(
       lineColor: options?.lineColor ?? '#000000',
       background: options?.background ?? '#ffffff',
     })
+    const humanReadableText = svgElement.querySelector('text')
+    if (humanReadableText) {
+      humanReadableText.setAttribute('stroke', options?.lineColor ?? '#000000')
+      humanReadableText.setAttribute('stroke-width', '0.25')
+      humanReadableText.setAttribute('paint-order', 'stroke')
+    }
   } catch (err) {
     console.error('[renderBarcodeSvg] Failed to generate barcode:', err)
   }
