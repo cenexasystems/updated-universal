@@ -294,6 +294,10 @@ export default function Dashboard() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [searchResults, setSearchResults] = useState<DashboardOrder[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const HISTORY_PAGE_SIZE = 100
+  const [historyOffset, setHistoryOffset] = useState(0)
+  const [historyHasMore, setHistoryHasMore] = useState(false)
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return window.localStorage.getItem('dashboard-sidebar-collapsed') === '1'
@@ -430,7 +434,7 @@ export default function Dashboard() {
       reference_number: advance.reference_number || '',
     }
     setOrders(current => [completed, ...current.filter(order => order.id !== completed.id)])
-    setSearchResults(current => [completed, ...current.filter(order => order.id !== completed.id)].slice(0, 100))
+    setSearchResults(current => [completed, ...current.filter(order => order.id !== completed.id)])
     setOrderItems(current => [...completedItems.map(item => ({ order_id: completed.id, product_name: String(item.name || 'Product'), category: String(item.category || advance.category || ''), quantity: Number(item.quantity || 1), line_total: Number(item.line_total || 0), is_manual: false })), ...current.filter(row => row.order_id !== completed.id)])
   }, [user?.id])
 
@@ -918,7 +922,10 @@ export default function Dashboard() {
       const mappedOrders = (oRes.data || []).map(r => toDashboardOrder(r as Record<string, unknown>))
       setCats((cRes.data || []) as Category[])
       setOrders(mappedOrders)
-      setSearchResults(mappedOrders.filter(o => normalizeOrderType(o.order_type) !== 'online_request').slice(0, 100))
+      const initialHistory = mappedOrders.filter(o => normalizeOrderType(o.order_type) !== 'online_request').slice(0, HISTORY_PAGE_SIZE)
+      setSearchResults(initialHistory)
+      setHistoryOffset(initialHistory.length)
+      setHistoryHasMore(initialHistory.length >= HISTORY_PAGE_SIZE)
       setCoupons((couponRes.data || []) as DashboardCoupon[])
       setExpenses(expList || [])
 
@@ -1362,10 +1369,12 @@ export default function Dashboard() {
   }, [billTypeFilter, datePreset, search])
 
   // Order search - POS bills only (online_request excluded)
-  const runSearch = async (e?: FormEvent, overrideDates?: { dateFrom?: string; dateTo?: string }) => {
+  const runSearch = async (e?: FormEvent, overrideDates?: { dateFrom?: string; dateTo?: string }, append = false) => {
     e?.preventDefault()
-    setSearchLoading(true)
+    if (append) setHistoryLoadingMore(true)
+    else setSearchLoading(true)
     try {
+      const rangeFrom = append ? historyOffset : 0
       const qText = historyQuickSearch.trim()
       const invInput = search.invoiceNo.trim()
       const phoneInput = search.phone.trim()
@@ -1378,7 +1387,7 @@ export default function Dashboard() {
         .select('id, invoice_no, customer_name, phone, address, created_at, total, status, order_mode, order_type, items, coupon_code, discount_amount, manual_discount_amount, delivery_charge, total_gst, gst_amount, payment_mode, payment_method, split_details, remarks, reference_number')
         .neq('order_type', 'online_request')
         .order('created_at', { ascending: false })
-        .limit(hasQuery ? 1000 : 500)
+        .range(rangeFrom, rangeFrom + HISTORY_PAGE_SIZE - 1)
 
       if (qText) {
         const digitsOnly = qText.replace(/\D/g, '')
@@ -1434,6 +1443,9 @@ export default function Dashboard() {
       const { data, error } = await q
       if (error) throw error
 
+      const fetchedCount = (data || []).length
+      setHistoryOffset(rangeFrom + fetchedCount)
+      setHistoryHasMore(fetchedCount >= HISTORY_PAGE_SIZE)
       let results = (data || []).map(r => toDashboardOrder(r as Record<string, unknown>))
 
       // Client-side match filter to handle formatted invoice numbers and local calendar dates
@@ -1482,7 +1494,7 @@ export default function Dashboard() {
       if (billTypeFilter !== 'all') results = results.filter(o => getBillType(o) === billTypeFilter)
 
       // Fallback: if query returned no results from Supabase, search in pre-loaded orders
-      if (results.length === 0 && orders.length > 0) {
+      if (!append && results.length === 0 && orders.length > 0) {
         const localMatches = orders.filter(o => {
           if (normalizeOrderType(o.order_type) === 'online_request') return false
           if (billTypeFilter === 'manual' && getBillType(o) !== 'manual') return false
@@ -1495,12 +1507,24 @@ export default function Dashboard() {
         }
       }
 
-      setSearchResults(results.filter(o => !deletedOrderIds.current.has(o.id)))
+      const visible = results.filter(o => !deletedOrderIds.current.has(o.id))
+      if (append) {
+        setSearchResults(prev => {
+          const seen = new Set(prev.map(o => o.id))
+          return [...prev, ...visible.filter(o => !seen.has(o.id))]
+        })
+      } else {
+        setSearchResults(visible)
+      }
     } catch (err) {
       console.error('Search error:', err)
-      setSearchResults([])
+      if (!append) {
+        setSearchResults([])
+        setHistoryHasMore(false)
+      }
     } finally {
       setSearchLoading(false)
+      setHistoryLoadingMore(false)
     }
   }
 
@@ -3565,7 +3589,7 @@ export default function Dashboard() {
                 )}
               </div>
               <div className="space-y-3 md:hidden">
-                {filteredSearchResults.slice(0, 50).map(o => {
+                {filteredSearchResults.map(o => {
                   const billTypeLabel = normalizeOrderType(o.order_type) === 'manual_sale' ? 'MANUAL' : normalizeOrderMode(o.order_mode) === 'online' ? 'ONLINE' : 'OFFLINE'
                   const billTypeClass = normalizeOrderType(o.order_type) === 'manual_sale' ? 'bg-gray-50 text-gray-700' : normalizeOrderMode(o.order_mode) === 'online' ? 'bg-gray-50 text-gray-700' : 'bg-orange-50 text-orange-700'
                   return (
@@ -3671,7 +3695,7 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#F3F4F6]/30 bg-white">
-                    {filteredSearchResults.slice(0, 50).map(o => {
+                    {filteredSearchResults.map(o => {
                       const billTypeLabel = normalizeOrderType(o.order_type) === 'manual_sale' ? 'MANUAL' : normalizeOrderMode(o.order_mode) === 'online' ? 'ONLINE' : 'OFFLINE'
                       const billTypeClass = normalizeOrderType(o.order_type) === 'manual_sale' ? 'bg-gray-50 text-gray-700' : normalizeOrderMode(o.order_mode) === 'online' ? 'bg-gray-50 text-gray-700' : 'bg-orange-50 text-orange-700'
                       return (
@@ -3800,6 +3824,19 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               </div>
+              {historyHasMore && (
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    disabled={historyLoadingMore || searchLoading}
+                    onClick={() => void runSearch(undefined, undefined, true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-5 py-2.5 text-[13px] font-black text-[#856514] transition-colors hover:bg-[#D4AF37]/20 disabled:opacity-60 cursor-pointer"
+                  >
+                    <RefreshCw size={14} className={historyLoadingMore ? 'animate-spin' : ''} />
+                    {historyLoadingMore ? l('Loading...', 'ஏற்றுகிறது...') : l('Show more (next 100)', 'மேலும் காட்டு (அடுத்த 100)')}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
