@@ -83,7 +83,7 @@ type DashboardOrder = {
   coupon_code: string; discount_amount: number; manual_discount_amount: number; delivery_charge: number
   total_gst: number; payment_mode: string; payment_method?: string; split_details?: unknown; invoice_pdf_url: string; remarks?: string; reference_number?: string
 }
-type DashboardOrderItem = { order_id: string; product_id?: string | null; variant_id?: string | null; product_name: string; category?: string; quantity: number; line_total: number; is_manual?: boolean | null }
+type DashboardOrderItem = { order_id: string; product_id?: string | null; variant_id?: string | null; product_name: string; variant_name?: string | null; category?: string; quantity: number; line_total: number; is_manual?: boolean | null }
 type DashboardCoupon = {
   id: number
   code: string
@@ -561,6 +561,9 @@ export default function Dashboard() {
       : completedOrders.flatMap(order => parseOrderItems(order.items).map(row => ({
           order_id: order.id,
           product_name: String((row as Record<string,unknown>).product_name || (row as Record<string,unknown>).name || 'Product'),
+          variant_name: String((row as Record<string,unknown>).variant_name || ''),
+          product_id: (row as Record<string,unknown>).product_id != null ? String((row as Record<string,unknown>).product_id) : null,
+          variant_id: (row as Record<string,unknown>).variant_id != null ? String((row as Record<string,unknown>).variant_id) : null,
           category: String((row as Record<string,unknown>).category || ''),
           quantity: toNumber((row as Record<string,unknown>).quantity ?? (row as Record<string,unknown>).qty, 0),
           line_total: toNumber((row as Record<string,unknown>).line_total ?? (row as Record<string,unknown>).lineTotal, 0),
@@ -571,7 +574,12 @@ export default function Dashboard() {
 
     // Unit cost lookup: variant cost price first, then product cost price (by id, then by name)
     const variantCostById = new Map<string, number>()
-    Object.values(variantsMap || {}).forEach(list => (list || []).forEach(v => { if (v && v.purchasePrice != null && Number(v.purchasePrice) > 0) variantCostById.set(String(v.id), Number(v.purchasePrice)) }))
+    const variantNameById = new Map<string, string>()
+    Object.values(variantsMap || {}).forEach(list => (list || []).forEach(v => {
+      if (!v) return
+      variantNameById.set(String(v.id), v.variantName)
+      if (v.purchasePrice != null && Number(v.purchasePrice) > 0) variantCostById.set(String(v.id), Number(v.purchasePrice))
+    }))
     const productCostById = new Map<string, number>()
     const productCostByName = new Map<string, number>()
     products.forEach(p => {
@@ -591,7 +599,7 @@ export default function Dashboard() {
     let totalManualRevenue = 0
 
     completedItems.forEach((rawItem) => {
-      const { product_name, category, quantity, line_total, order_id, is_manual } = rawItem
+      const { product_name, variant_name, category, quantity, line_total, order_id, is_manual } = rawItem
       const qty = toNumber(quantity, 0)
       const rev = toNumber(line_total, 0)
       totalProductsSold += qty
@@ -599,16 +607,19 @@ export default function Dashboard() {
       const rawKey  = String(product_name || 'Product').trim() || 'Product'
       const dashIdx = rawKey.indexOf(' - ')
       const mainName   = dashIdx > 0 ? rawKey.slice(0, dashIdx) : rawKey
-      const variantName = dashIdx > 0 ? rawKey.slice(dashIdx + 3) : ''
+      const variantName = String(variant_name || '').trim()
+        || (rawItem.variant_id ? variantNameById.get(String(rawItem.variant_id)) : '')
+        || (dashIdx > 0 ? rawKey.slice(dashIdx + 3).trim() : '')
+      const productKey = variantName ? `${mainName} - ${variantName}` : mainName
 
-      const pc = productMap.get(rawKey) || { name: mainName, variant: variantName, qty: 0, revenue: 0, billCount: 0, cost: 0, costedRevenue: 0, costedQty: 0 }
+      const pc = productMap.get(productKey) || { name: mainName, variant: variantName, qty: 0, revenue: 0, billCount: 0, cost: 0, costedRevenue: 0, costedQty: 0 }
       pc.qty += qty; pc.revenue += rev
       const unitCost = is_manual ? 0 : unitCostFor(rawItem as { product_id?: string | null; variant_id?: string | null }, mainName)
       if (unitCost > 0) { pc.cost += unitCost * qty; pc.costedRevenue += rev; pc.costedQty += qty }
-      productMap.set(rawKey, pc)
+      productMap.set(productKey, pc)
 
-      if (!productOrders.has(rawKey)) productOrders.set(rawKey, new Set())
-      productOrders.get(rawKey)!.add(order_id)
+      if (!productOrders.has(productKey)) productOrders.set(productKey, new Set())
+      productOrders.get(productKey)!.add(order_id)
 
       const catName = category || prodCatLookup.get(mainName.toLowerCase()) || 'Uncategorized'
       const cc = categoryMap.get(catName) || { name: catName, qty: 0, revenue: 0 }
@@ -916,14 +927,14 @@ export default function Dashboard() {
         let oi: unknown[] | null = null
         let orderItemsError: unknown = null
         const orderItemsResult = await supabase
-          .from('order_items').select('order_id,product_id,variant_id,product_name,category,quantity,line_total,is_manual')
+          .from('order_items').select('order_id,product_id,variant_id,product_name,variant_name,category,quantity,line_total,is_manual')
           .in('order_id', orderIds)
         oi = orderItemsResult.data
         orderItemsError = orderItemsResult.error
 
         if (orderItemsError) {
           const fallbackItemsResult = await supabase
-            .from('order_items').select('order_id,product_id,variant_id,product_name,quantity,line_total,is_manual')
+            .from('order_items').select('order_id,product_id,variant_id,product_name,variant_name,quantity,line_total,is_manual')
             .in('order_id', orderIds)
           oi = fallbackItemsResult.data
         }
@@ -933,6 +944,7 @@ export default function Dashboard() {
           product_id: (r as Record<string,unknown>).product_id != null ? String((r as Record<string,unknown>).product_id) : null,
           variant_id: (r as Record<string,unknown>).variant_id != null ? String((r as Record<string,unknown>).variant_id) : null,
           product_name: String((r as Record<string,unknown>).product_name || 'Product'),
+          variant_name: (r as Record<string,unknown>).variant_name != null ? String((r as Record<string,unknown>).variant_name) : null,
           category: String((r as Record<string,unknown>).category || ''),
           quantity: toNumber((r as Record<string,unknown>).quantity, 0),
           line_total: toNumber((r as Record<string,unknown>).line_total, 0),
